@@ -26,10 +26,13 @@
 					<value>make</value>
 				</dictionary>
 				<dictionary>
+<<<<<<< HEAD
 					<key>org.eclipse.cdt.make.core.build.location</key>
 					<value></value>
 				</dictionary>
 				<dictionary>
+=======
+>>>>>>> 66a40f1e877aa768df0f22325e1a099236d831ce
 					<key>org.eclipse.cdt.make.core.build.target.auto</key>
 					<value>all</value>
 				</dictionary>
