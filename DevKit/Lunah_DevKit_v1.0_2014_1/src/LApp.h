@@ -90,7 +90,7 @@ int iThreshold1 = 0;	// Beginning value of the trigger threshold
 
 /* Set Integration Times Arrays */
 char updateint = 'N';	// switch to change integral values
-int setIntsArray[8] = {};
+u32 setIntsArray[8] = {};
 u32 setSamples[4] = {};
 int setBL = 0;
 int setSI = 0;
@@ -113,6 +113,7 @@ short cntrl = 0;
 short pot_addr = 0;
 
 // General Purpose Variables
+int retVal = 0;
 int Status; 					// General purpose Status indicator
 int sw = 0;  						// switch to stop and return to main menu  0= default.  1 = return
 u32 global_frame_counter = 0;	// Counts ... for ...
@@ -124,10 +125,11 @@ int InitializeInterruptSystem(u16 deviceID);
 void InterruptHandler (void );
 int SetUpInterruptSystem(XScuGic *XScuGicInstancePtr);
 int ReadCommandPoll();				// Read Command Poll Function
+int ReadCommand(u8 * recvBuffer);	// Read the command from the RS422
 void SetIntegrationTimes();			// Set the Registers forIntegral Times
 int PrintData();					// Print Data to the Terminal Window
-void ClearBuffers();				// Clear Processeed Data Buffers
-int DAQ();							// Clear Processeed Data Buffers
+void ClearBuffers();				// Clear Processed Data Buffers
+int DAQ();							// Clear Processed Data Buffers
 int ReadDataIn(int numfilesWritten, FIL * filObj);// Take data from DRAM, process it, save it to SD
 int getWFDAQ();						// Print data skipping saving it to SD card
 int LNumDigits(int number);			// Determine the number of digits in an int
