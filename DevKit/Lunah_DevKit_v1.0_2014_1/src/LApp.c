@@ -13,6 +13,39 @@
 //////////////////////////// MAIN //////////////////// MAIN //////////////
 int main()
 {
+	//Variable Definitions
+	int iterator = 0;
+	int	imenusel = 99999;	// Menu Select
+	int iscanfReturn = 0;
+	int iTransferReturn = 0;
+	//unsigned long long realTime = 0;
+	int iwfRunNumber = 0;
+	int idaqRunNumber = 0;
+	int iorbitNumber = 0;
+	char cfileName[FILENAME_SIZE] = "";
+	char cFileToAccess[FILENAME_SIZE] = "";
+	int iTriggerThreshold = 0;
+	int ipollReturn = 0;
+	int iintegrationTimes[3] = {};
+	FILINFO fnoDIR2;
+
+	//case 2
+	int iTmpSetTemp = 0;
+	int iTmpTimeout = 0;
+	//case 3
+	//unsigned char cAnalogTemp = 12;
+	//unsigned char cDigitalTemp = 34;
+	u32 uiTotalNeutronsPSD = 294967295;
+	u32 uiLocalTime = 1234567890;
+	int iAnalogTemp = 12;
+	int iDigitalTemp = 34;
+	//case 10
+	float fNCut0 = 0.0;
+	float fNCut1 = 0.0;
+	//case 13
+	float fEnergySlope = 1.0;
+	float fEnergyIntercept = 0.0;
+
 	// Initialize System
     init_platform();  		// This initializes the platform, which is ...
 	ps7_post_config();
@@ -30,11 +63,17 @@ int main()
 	XUartPs_Config *Config = XUartPs_LookupConfig(UART_DEVICEID);
 	if (NULL == Config) { return 1;}
 	Status = XUartPs_CfgInitialize(&Uart_PS, Config, Config->BaseAddress);
-	if (Status != 0){ return 1;	}
+	if (Status != 0){
+		//return 1;	}
+		xil_printf("UART init failed\n");
+	}
 
 	/* Conduct a Selftest for the UART */
 	Status = XUartPs_SelfTest(&Uart_PS);
-	if (Status != 0) { return 1; }			//handle error checks here better
+	if (Status != 0) {
+		//return 1; }			//handle error checks here better
+	xil_printf("UART self-test failed\n");
+	}
 
 	/* Set to normal mode. */
 	XUartPs_SetOperMode(&Uart_PS, XUARTPS_OPER_MODE_NORMAL);
@@ -113,122 +152,52 @@ int main()
 		XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);	// Clear UART Read Buffer
 		memset(RecvBuffer, '0', 32);							// Clear RecvBuffer Variable
 
-		//sleep(0.5);  // Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 0.5 s
-		xil_printf("\n\r Devkit version 2.25 \n\r");
-		xil_printf("MAIN MENU \n\r");
-		xil_printf("*****\n\r");
-		xil_printf(" 0) Set Mode of Operation\n\r");
-		xil_printf(" 1) Enable or disable the system\n\r");
-		xil_printf(" 2) Continuously Read of Processed Data\n\r");
-		xil_printf("\n\r **Setup Parameters ** \n\r");
-		xil_printf(" 3) Set Trigger Threshold\n\r");
-		xil_printf(" 4) Set Integration Times (number of clock cycles * 4ns) \n\r");
-		xil_printf("\n\r ** Additional Commands ** \n\r");
-		xil_printf(" 5) Perform a DMA transfer of Waveform Data\n\r");
-		xil_printf(" 6) Perform a DMA transfer of Processed Data\n\r");
-		xil_printf(" 7) Check the Size of the Data Buffered (Max = 4095) \n\r");
-		xil_printf(" 8) Clear the Processed Data Buffers\n\r");
-		xil_printf(" 9) Execute Print of Data on DRAM \n\r");
-		xil_printf("10) GUI Serial Transfer \n\r");
-		xil_printf("11) GUI Serial Change Trigger Threshold\n\r");
-		xil_printf("12) GUI Serial Change Integration Times\n\r");
-		xil_printf("13) GUI Transfer Processed Data\n\r");
-		xil_printf("14) High Voltage and Temperature Control \n\r");
-		xil_printf("15) Print Out All Files in the Directory \n\r");
-		xil_printf("******\n\r");
 		while (XUartPs_IsSending(&Uart_PS)) { }  // Wait until Write Buffer is Sent
 
-/* GJS		ReadCommandPoll();	//testing ReadCommand() as the primary function
-		menusel = 99999;
-		sscanf(RecvBuffer,"%02u",&menusel);
-		if ( menusel < 0 || menusel > 15 ) {
-			xil_printf(" Invalid Command: Enter 0-15 \n\r");
-			sleep(1); 			// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 1 s
-		}*/
-		while(1)				//infinite loop for testing
+		while(1)
 		{
-			menusel = 99999;
+			imenusel = 99999;
 			memset(RecvBuffer, '\0', 32);							// Clear RecvBuffer Variable
-			menusel = ReadCommand(RecvBuffer);
+			imenusel = ReadCommandType(RecvBuffer, &Uart_PS);
 
 			//now use the return value to figure out what to do with this information1
-			if ( menusel >= 0 && menusel <= 15 )
+			if ( imenusel >= 0 && imenusel <= 17 )
 				break;
 		}
 
-		switch (menusel) { // Switch-Case Menu Select
+		switch (imenusel) { // Switch-Case Menu Select
+		case 0:	//Capture Processed Data;
+			xil_printf("DAQ initiated\n\r");
+			iscanfReturn = sscanf(RecvBuffer + 3 + 1, " %d", &iorbitNumber);
 
-		case 0: //Set Mode of Operation
-			mode = 99; //Detector->GetMode();
-			xil_printf("\n\r Waveform Data: \t Enter 0 <return>\n\r");
-			xil_printf(" LPF Waveform Data: \t Enter 1 <return>\n\r");
-			xil_printf(" DFF Waveform Data: \t Enter 2 <return>\n\r");
-			xil_printf(" TRG Waveform Data: \t Enter 3 <return>\n\r");
-			xil_printf(" Processed Data: \t Enter 4 <return>\n\r");
-			ReadCommandPoll();
-			sscanf(RecvBuffer,"%01u",&mode);
+			//create files and pass in filename to readDataIn function
+			snprintf(cfileName, 50, "%d_%d_evt.bin",iorbitNumber, idaqRunNumber);	//assemble the filename for this DAQ run
+			snprintf(cfileName, 50, "%d_%d_cnt.bin",iorbitNumber, idaqRunNumber);	//assemble the filename for this DAQ run
 
-			if (mode < 0 || mode > 4 ) { xil_printf("Invalid Command\n\r"); break; }
-			Xil_Out32 (XPAR_AXI_GPIO_14_BASEADDR, ((u32)mode));
-			// Register 14
-			if ( mode == 0 ) { xil_printf("Transfer AA Waveforms\n\r"); }
-			if ( mode == 1 ) { xil_printf("Transfer LPF Waveforms\n\r"); }
-			if ( mode == 2 ) { xil_printf("Transfer DFF Waveforms\n\r"); }
-			if ( mode == 3 ) { xil_printf("Transfer TRG Waveforms\n\r"); }
-			if ( mode == 4 ) { xil_printf("Transfer Processed Data\n\r"); }
-			sleep(1); 			// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 1 s
+			//return value for typing in DAQ_time is a filename
+			xil_printf("\r\n%s\r\n",cfileName);
 
-			dTime += 1;	//increment time for testing
-			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "Set mode %d %f ", mode, dTime);
-
-			ffs_res = f_open(&logFile, cLogFile, FA_OPEN_ALWAYS | FA_WRITE);
-			if(ffs_res){
-				xil_printf("Could not open file %d", ffs_res);
+			//begin polling for either 'break', 'end', or 'START'
+			while(1)
+			{
+				ipollReturn = ReadCommandType(RecvBuffer, &Uart_PS);
+				if(ipollReturn == 14 || ipollReturn == 15)	//14=break, 15=start_orbitnumber
+					break;
+			}
+			if(ipollReturn == 14)	//if the input was break, leave the loop, go back to menu
+			{
+				Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//disable system
 				break;
 			}
-			ffs_res = f_lseek(&logFile, filptr_clogFile);
-			ffs_res = f_write(&logFile, cWriteToLogFile, iSprintfReturn, &numBytesWritten);
-			filptr_clogFile += numBytesWritten;
-			snprintf(cWriteToLogFile, 10, "%d", filptr_clogFile);
-			ffs_res = f_lseek(&logFile, (10 - LNumDigits(filptr_clogFile)));	// Move to the start of the file
-			ffs_res = f_write(&logFile, cWriteToLogFile, LNumDigits(filptr_clogFile), &numBytesWritten);	//Record the new file pointer
-			ffs_res = f_close(&logFile);
-			break;
 
-		case 1: //Enable or disable the system
-			xil_printf("\n\r Disable: Enter 0 <return>\n\r");
-			xil_printf(" Enable: Enter 1 <return>\n\r");
-			ReadCommandPoll();
-			sscanf(RecvBuffer,"%01u",&enable_state);
-			if (enable_state != 0 && enable_state != 1) { xil_printf("Invalid Command\n\r"); break; }
-			Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, ((u32)enable_state));
-			// Register 18 Out enabled, In Disabled
-			if ( enable_state == 1 ) { xil_printf("DAQ Enabled\n\r"); }
-			if ( enable_state == 0 ) { xil_printf("DAQ Disabled\n\r"); }
-			sleep(1); 			// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 1 s
-
+			//'START' begins data collection via DAQ(), etc.
+			idaqRunNumber++;
+			//enable hardware
+			Xil_Out32(XPAR_AXI_GPIO_14_BASEADDR, 4);	//enable processed data
+			Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 1);	//enables system???
+			//write to log file that we are starting a DAQ run
 			dTime += 1;
-			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "Enable system %d %f ", enable_state, dTime);
-
-			ffs_res = f_open(&logFile, cLogFile, FA_OPEN_ALWAYS | FA_WRITE);
-			if(ffs_res){
-				xil_printf("Could not open file %d", ffs_res);
-				break;
-			}
-			ffs_res = f_lseek(&logFile, filptr_clogFile);
-			ffs_res = f_write(&logFile, cWriteToLogFile, iSprintfReturn, &numBytesWritten);
-			filptr_clogFile += numBytesWritten;												// Add the number of bytes written to the file pointer
-			snprintf(cWriteToLogFile, 10, "%d", filptr_clogFile);							// Write that to a string for saving
-			ffs_res = f_lseek(&logFile, (10 - LNumDigits(filptr_clogFile)));				// Seek to the beginning of the file skipping the leading zeroes
-			ffs_res = f_write(&logFile, cWriteToLogFile, LNumDigits(filptr_clogFile), &numBytesWritten); // Write the new file pointer
-			ffs_res = f_close(&logFile);
-
-			break;
-
-		case 2: //Continuously Read of Processed Data
-
-			dTime += 1;
-			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "Print data %d %f ", enable_state, dTime);
+			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "Print proc data %f ", dTime);
 
 			ffs_res = f_open(&logFile, cLogFile, FA_OPEN_ALWAYS | FA_WRITE);
 			if(ffs_res){
@@ -243,26 +212,75 @@ int main()
 			ffs_res = f_write(&logFile, cWriteToLogFile, LNumDigits(filptr_clogFile), &numBytesWritten); // Write the new file pointer
 			ffs_res = f_close(&logFile);
 
-			xil_printf("\n\r ********Data Acquisition:\n\r");
-			xil_printf(" Press 'q' to Stop or Press Hardware USR reset button  \n\r");
-			xil_printf(" Press <return> to Start");
-			ReadCommandPoll();	//Just get a '\n' to continue
-			DAQ();
-			sw = 0;   // broke out of the read loop, stop switch reset to 0
+			//Begin collecting data
+			//DAQ(fEnergySlope, fEnergyIntercept);
+			uiTotalNeutronsPSD = 0;
+			uiLocalTime = 0;
+			memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
+			while(1)
+			{
+				ipollReturn = PollUart(RecvBuffer, &Uart_PS);
+				if(ipollReturn == 14 || ipollReturn == 16)	//14=break, 16=END_realtime
+					break;
+				xil_printf("\r\n%d_%d_%x_%x\r\n", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
+				uiTotalNeutronsPSD += 25;
+				uiLocalTime += 1;
+				sleep(2);
+			}
+			if(ipollReturn == 16)	//if the input was END, leave the loop, go back to menu
+			{
+				//write the realtime to the file as a footer
+
+				//Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//disable system
+				xil_printf("\r\n%x\r\n",uiTotalNeutronsPSD);	//return value for END_time is the neutron totals
+			}
+			else	//break was issued
+			{
+				Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//disable system
+			}
+
+			sw = 0;	//reset stop switch
 			break;
+		case 1:	//Capture WF Data
+			xil_printf("WF capture initiated\n\r");
+			iscanfReturn = sscanf(RecvBuffer + 2 + 1, " %d", &iorbitNumber);
 
-		case 3: //Set Threshold at XPAR_AXI_GPIO_10_BASEADDR
-			iThreshold0 = Xil_In32(XPAR_AXI_GPIO_10_BASEADDR);	//gets the existing threshold
-			retVal = sscanf(RecvBuffer + strlen("THR") + 1, " %d", &iThreshold1);
-			Xil_Out32(XPAR_AXI_GPIO_10_BASEADDR, ((u32)iThreshold1));
-			xil_printf("New Threshold = %d \n\r",Xil_In32(XPAR_AXI_GPIO_10_BASEADDR));
+			//turn on hardware
+			sleep(1);
 
+			//create files and pass in filename to readDataIn function
+			snprintf(cfileName, 50, "%d_%d_wfd.bin",iorbitNumber, iwfRunNumber);	//assemble the filename for this DAQ run
+
+			//send filename to indicate "ready to go"
+			xil_printf("\r\n%s\r\n",cfileName);
+
+			//begin polling for either 'break', 'end', or 'START'
+			memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
+			XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);	// Clear UART Read Buffer
+			while(1)
+			{
+				ipollReturn = ReadCommandType(RecvBuffer, &Uart_PS);
+				if(ipollReturn == 14 || ipollReturn == 15)	//14=break, 15=START_realtime
+					break;
+			}
+			if(ipollReturn == 14)	//if the input was break, leave the loop, go back to menu
+			{
+				Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//disable system
+				break;
+			}
+
+			//'START' begins data collection via DAQ(), etc.
+			iwfRunNumber++;
+			//enable hardware
+			Xil_Out32(XPAR_AXI_GPIO_14_BASEADDR, 0);	//enable processed data
+			Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 1);	//enables system???
+			//write to log file that we are starting a DAQ run
 			dTime += 1;
-			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "Set trigger threshold from %d to %d %f ", iThreshold0, iThreshold1, dTime);
+			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "Print wf data %f ", dTime);
 
 			ffs_res = f_open(&logFile, cLogFile, FA_OPEN_ALWAYS | FA_WRITE);
 			if(ffs_res){
-				xil_printf("Could not open file %d", ffs_res);
+				//xil_printf("Could not open file %d", ffs_res);
 				break;
 			}
 			ffs_res = f_lseek(&logFile, filptr_clogFile);
@@ -272,163 +290,143 @@ int main()
 			ffs_res = f_lseek(&logFile, (10 - LNumDigits(filptr_clogFile)));				// Seek to the beginning of the file skipping the leading zeroes
 			ffs_res = f_write(&logFile, cWriteToLogFile, LNumDigits(filptr_clogFile), &numBytesWritten); // Write the new file pointer
 			ffs_res = f_close(&logFile);
-			break;
 
-		case 4: //Set Integration Times
-			setIntsArray[4] = -52 + Xil_In32(XPAR_AXI_GPIO_0_BASEADDR)*4;	//gets the current integration times
-			setIntsArray[5] = -52 + Xil_In32(XPAR_AXI_GPIO_1_BASEADDR)*4;
-			setIntsArray[6] = -52 + Xil_In32(XPAR_AXI_GPIO_2_BASEADDR)*4;
-			setIntsArray[7] = -52 + Xil_In32(XPAR_AXI_GPIO_3_BASEADDR)*4;
-
-			sscanf(RecvBuffer + strlen("INT") + 1,"%u %hu %hu %hu", &setIntsArray[0], &setIntsArray[1], &setIntsArray[2], &setIntsArray[3]);
-
-			Xil_Out32(XPAR_AXI_GPIO_0_BASEADDR, (setIntsArray[0]+52)/4);
-			Xil_Out32(XPAR_AXI_GPIO_1_BASEADDR, (setIntsArray[1]+52)/4);
-			Xil_Out32(XPAR_AXI_GPIO_2_BASEADDR, (setIntsArray[2]+52)/4);
-			Xil_Out32(XPAR_AXI_GPIO_3_BASEADDR, (setIntsArray[3]+52)/4);
-
-			//testing
-			printf("INT1 from %u to %u\n\r", setIntsArray[4], setIntsArray[0]);
-
-			dTime += 1;
-			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "Set integration times to %d %d %d %d from %d %d %d %d %f ",
-					setIntsArray[0], setIntsArray[1], setIntsArray[2], setIntsArray[3], setIntsArray[4], setIntsArray[5], setIntsArray[6], setIntsArray[7], dTime);
-			ffs_res = f_open(&logFile, cLogFile, FA_OPEN_ALWAYS | FA_WRITE);
-			if(ffs_res){
-				xil_printf("Could not open file %d", ffs_res);
-				break;
+			//Begin collecting data
+			//DAQ(fEnergySlope, fEnergyIntercept);
+			//just print out some random data while polling for break, end, etc
+			uiTotalNeutronsPSD = 0;
+			uiLocalTime = 0;
+			memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
+			while(1)
+			{
+				ipollReturn = PollUart(RecvBuffer, &Uart_PS);
+				if(ipollReturn == 14 || ipollReturn == 16)	//14=break, 16=END_realtime
+					break;
+				xil_printf("\r\n%d_%d_%x_%x\r\n", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
+				uiTotalNeutronsPSD += 25;
+				uiLocalTime += 1;
+				sleep(2);
 			}
-			ffs_res = f_lseek(&logFile, filptr_clogFile);
-			ffs_res = f_write(&logFile, cWriteToLogFile, iSprintfReturn, &numBytesWritten);
-			filptr_clogFile += numBytesWritten;
-			snprintf(cWriteToLogFile, 10, "%d", filptr_clogFile);							// Write that to a string for saving
-			ffs_res = f_lseek(&logFile, (10 - LNumDigits(filptr_clogFile)));				// Seek to the beginning of the file skipping the leading zeroes
-			ffs_res = f_write(&logFile, cWriteToLogFile, LNumDigits(filptr_clogFile), &numBytesWritten); // Write the new file pointer
-			ffs_res = f_close(&logFile);
+			if(ipollReturn == 16)	//if the input was break, leave the loop, go back to menu
+			{
+				//write the realtime to the file as a footer
 
-			sleep(1); 			// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 1 s
+				//Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//disable system
+				xil_printf("\r\n%x\r\n",uiTotalNeutronsPSD);	//return value for END_time is the neutron totals
+			}
+			else	//break was issued
+			{
+				Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//disable system
+			}
+
+			sw = 0;	//reset stop switch
 			break;
-
-		case 5: //Perform a DMA transfer
-			xil_printf("\n\r Perform DMA Transfer of Waveform Data\n\r");
-			xil_printf(" Press 'q' to Exit Transfer  \n\r");
-			Xil_Out32 (XPAR_AXI_DMA_0_BASEADDR + 0x48, 0xa000000);
-			Xil_Out32 (XPAR_AXI_DMA_0_BASEADDR + 0x58 , 65536);
-			sleep(1); 			// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 1 s
-			PrintData();		// Display data to console.
-			sw = 0;   // broke out of the read loop, stop swith reset to 0
+		case 2: //Set Temperature	//Just Read Temp for now...
+			iscanfReturn = sscanf(RecvBuffer + 3 + 1, " %d_%d", &iTmpSetTemp, &iTmpTimeout);
+			IIC_SLAVE_ADDR=&IIC_SLAVE_ADDR2;
+			i2c_Send_Buffer[0] = 0x0;
+			i2c_Send_Buffer[1] = 0x0;
+			//Status = IicPsMasterSend(IIC_DEVICE_ID, i2c_Send_Buffer, i2c_Recv_Buffer, IIC_SLAVE_ADDR);
+			//Status = IicPsMasterRecieve(IIC_DEVICE_ID, i2c_Recv_Buffer, IIC_SLAVE_ADDR);
+			a = i2c_Recv_Buffer[0]<< 5;
+			b = a | i2c_Recv_Buffer[1] >> 3;
+			b /= 16;
+			//xil_printf("%d\xf8\x43\n", b);
+			memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
+			for(iterator = 0;iterator < iTmpTimeout; iterator++)
+			{
+				ipollReturn = PollUart(RecvBuffer, &Uart_PS);
+				if(ipollReturn == 14 || ipollReturn == 17)	//14=break, 17=ENDTMP_
+					break;
+				xil_printf("\r\n%d_%d_%x_%x\r\n", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
+				sleep(2);
+			}
 			break;
-
-		case 6: //Perform a DMA transfer of Processed data
-			xil_printf("\n\r ********Perform DMA Transfer of Processed Data \n\r");
-			xil_printf(" Press 'q' to Exit Transfer  \n\r");
-			//Xil_Out32 (XPAR_AXI_GPIO_18_BASEADDR, 0);	// Disable : GPIO Reg Capture Module
-			Xil_Out32 (XPAR_AXI_GPIO_15_BASEADDR, 1);	// Enable: GPIO Reg to Readout Data MUX
-			//sleep(1);				// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 1 s
-			Xil_Out32 (XPAR_AXI_DMA_0_BASEADDR + 0x48, 0xa000000); // Transfer from BRAM to DRAM, start address 0xa000000, 16-bit length
-			Xil_Out32 (XPAR_AXI_DMA_0_BASEADDR + 0x58 , 65536);
-			sleep(1); 			// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 1 s
-			Xil_Out32 (XPAR_AXI_GPIO_15_BASEADDR, 0); 	// Disable: GPIO Reg turn off Readout Data MUX
-			ClearBuffers();
-			PrintData();								// Display data to console.
-			//Xil_Out32 (XPAR_AXI_GPIO_18_BASEADDR, 1);	// Enable : GPIO Reg Capture Module
-			sw = 0;   // broke out of the read loop, stop swith reset to 0
-			sleep(1); 			// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 1 s
+		case 3: //GETSTAT
+			//this will be the callback function for the interrupts that we will use to send the heartbeat information
+			//need to print out char-char-int-int (analog temp, digital temp, agg neutron w/psd, local time)
+			xil_printf("\r\n%d_%d_%x_%x\r\n", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
 			break;
-
-		case 7: //Check the Size of the Data Buffers
-			databuff = Xil_In32 (XPAR_AXI_GPIO_11_BASEADDR);
-			xil_printf("\n\r BRAM Data Buffer Size = %d \n\r",databuff);
-			sleep(1); 			// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 1 s
+		case 4: //DISABLE_ACT
+			xil_printf("\r\nAAAAAA\r\n");
 			break;
-
-		case 8: //Clear the processed data buffers
-			xil_printf("\n\r Clear the Data Buffers\n\r");
-			ClearBuffers();
-			sleep(1); 			// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 1 s
+		case 5: //DISABLE_TEC
+			xil_printf("\r\nAAAAAA\r\n");
 			break;
-
-		case 9: //Print DMA Data
-			xil_printf("\n\r Print Data\n\r");
-			PrintData();
+		case 6: //Transfer files
+			//read in the name of the file to be transmitted
+			iscanfReturn = sscanf(RecvBuffer + 2 + 1, " %s", cFileToAccess);
+			iTransferReturn = TransferFiles(cFileToAccess, &Uart_PS);
+			if(iTransferReturn != 0)
+				xil_printf("\r\nFFFFFF\r\n");
 			break;
-		case 10: //Transfer data over serial port	// Skips setting integrals, threshold	//Difference is this doesn't save to sd, it prints out the data for us
-			mode = 0;
-			Xil_Out32 (XPAR_AXI_GPIO_14_BASEADDR, ((u32)mode));	//sets mode to transfer AA waveforms
-			sleep(1);
-			enable_state = 1;
-			Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, ((u32)enable_state));	//enables the system
-			sleep(1);
-			getWFDAQ();
+		case 7: //Delete Files
+			//read in the name of the file to be deleted
+			iscanfReturn = sscanf(RecvBuffer + 3 + 1, " %s", cFileToAccess);
+			if(!f_stat(cFileToAccess, &fnoDIR2))	//returns 0 (false) if the file exists // !0 = true
+			{
+				ffs_res = f_unlink(cFileToAccess);
+				xil_printf("%\r\nd_AAAA\r\n",ffs_res);
+			}
+			else
+				xil_printf("\r\nFFFFFF\r\n");
 			break;
-		case 11: //change threshold over the serial connection
-			xil_printf("Enter the new threshold: <enter>\n");
-			ReadCommandPoll();
-			sscanf(RecvBuffer,"%04u",&iThreshold1);
-			Xil_Out32(XPAR_AXI_GPIO_10_BASEADDR, ((u32)iThreshold1));
-			xil_printf("New Threshold = %d \n\r",Xil_In32(XPAR_AXI_GPIO_10_BASEADDR));
-			sleep(1); 			// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 1 s
+		case 8: //List Data Files
+			ffs_res = f_open(&directoryLogFile, cDirectoryLogFile0, FA_READ);	//open the directory log file
+			dirSize = f_size(&directoryLogFile) - 10;							//we don't want the first 10 bits
+			filptr_cDIRFile = 10;												//set the read pointer after those bits
+			dirFileContents = (char *)malloc(1 * dirSize + 1);							//reserve space for the file to be read to	//this is one char for each byte in the file
+			ffs_res = f_lseek(&directoryLogFile, 10);							//move to the beginning of the file
+			ffs_res = f_read(&directoryLogFile, dirFileContents, dirSize, &numBytesRead);	//read the file contents to dirFileContents
+			ffs_res = f_close(&directoryLogFile);								//close the log file
+			snprintf(dirFileContents, dirSize + 1, dirFileContents + '\0');		//append a null terminator
+			xil_printf(dirFileContents);										//print out the contents (will be a transfer at a later time)
+			free(dirFileContents);												//free the memory reserved by malloc
 			break;
-		case 12: //change integrals over the serial connection
-			xil_printf("Enter each integral time followed by <enter>");
-			ReadCommandPoll();
-			sscanf(RecvBuffer,"%04u",&setBL);
-			ReadCommandPoll();
-			sscanf(RecvBuffer,"%04u",&setSI);
-			ReadCommandPoll();
-			sscanf(RecvBuffer,"%04u",&setLI);
-			ReadCommandPoll();
-			sscanf(RecvBuffer,"%04u",&setFI);
+		case 9: //Set Trigger Threshold
+			//read in value from the recvBuffer
+			iscanfReturn = sscanf(RecvBuffer + 3 + 1," %d", &iTriggerThreshold);
+			//check that it's within accepted values
+			if((iTriggerThreshold > 0) && (iTriggerThreshold < 10000))
+			{
+				Xil_Out32(XPAR_AXI_GPIO_10_BASEADDR, (u32)iTriggerThreshold);
 
-			Xil_Out32 (XPAR_AXI_GPIO_0_BASEADDR, ((u32)((setBL+52)/4)));	//set baseline int time
-			Xil_Out32 (XPAR_AXI_GPIO_1_BASEADDR, ((u32)((setSI+52)/4)));	//set short int time
-			Xil_Out32 (XPAR_AXI_GPIO_2_BASEADDR, ((u32)((setLI+52)/4)));	//set long int time
-			Xil_Out32 (XPAR_AXI_GPIO_3_BASEADDR, ((u32)((setFI+52)/4)));	//set full int time
+				//record the change in the log file
+				dTime += 1;
+				iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "Set trigger threshold to %d %f ", iTriggerThreshold, dTime);
 
-			//echo back the changed values //for checking
-			xil_printf("  Inputs Rounded to the Nearest 4 ns : Number of Samples\n\r");
-			xil_printf("  Baseline Integral Window  [-200ns,%dns]: %d \n\r",-52 + ((int)Xil_In32(XPAR_AXI_GPIO_0_BASEADDR))*4, 38+Xil_In32(XPAR_AXI_GPIO_0_BASEADDR) );
-			xil_printf("  Short Integral Window 	  [-200ns,%dns]: %d \n\r",-52 + ((int)Xil_In32(XPAR_AXI_GPIO_1_BASEADDR))*4, 38+Xil_In32(XPAR_AXI_GPIO_1_BASEADDR));
-			xil_printf("  Long Integral Window      [-200ns,%dns]: %d \n\r",-52 + ((int)Xil_In32(XPAR_AXI_GPIO_2_BASEADDR))*4, 38+Xil_In32(XPAR_AXI_GPIO_2_BASEADDR));
-			xil_printf("  Full Integral Window      [-200ns,%dns]: %d \n\r",-52 + ((int)Xil_In32(XPAR_AXI_GPIO_3_BASEADDR))*4, 38+Xil_In32(XPAR_AXI_GPIO_3_BASEADDR));
+				ffs_res = f_open(&logFile, cLogFile, FA_OPEN_ALWAYS | FA_WRITE);
+				if(ffs_res){
+					xil_printf("Could not open file %d\r\n", ffs_res);
+					break;
+				}
+				ffs_res = f_lseek(&logFile, filptr_clogFile);
+				ffs_res = f_write(&logFile, cWriteToLogFile, iSprintfReturn, &numBytesWritten);
+				filptr_clogFile += numBytesWritten;
+				snprintf(cWriteToLogFile, 10, "%d", filptr_clogFile);							// Write that to a string for saving
+				ffs_res = f_lseek(&logFile, (10 - LNumDigits(filptr_clogFile)));				// Seek to the beginning of the file skipping the leading zeroes
+				ffs_res = f_write(&logFile, cWriteToLogFile, LNumDigits(filptr_clogFile), &numBytesWritten); // Write the new file pointer
+				ffs_res = f_close(&logFile);
+
+				//read back value from the FPGA
+				iTriggerThreshold = 0;	//clear the number before reading back to it
+				iTriggerThreshold = Xil_In32(XPAR_AXI_GPIO_10_BASEADDR);
+				xil_printf("\r\n%d\r\n",iTriggerThreshold);
+			}
+			else
+				xil_printf("FFFFFF\r\n");
 			break;
-		case 13: //Transfer processed data over the serial port
-			mode = 4;
-			Xil_Out32 (XPAR_AXI_GPIO_14_BASEADDR, ((u32)mode));	//sets mode to processed data
-			sleep(1);
-			enable_state = 1;
-			Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, ((u32)enable_state)); //enables the system
-			sleep(1);
-			getWFDAQ();
+		case 10: //Set Neutron Cuts
+			iscanfReturn = sscanf(RecvBuffer + 6 + 1, " %f_%f", &fNCut0, &fNCut1);
+			xil_printf("\r\n%d_%d\r\n", (int)fNCut0, (int)fNCut1);
 			break;
-		case 14: //HV and temp control
-			xil_printf("************HIGH VOLTAGE CONTROL************\n\r");
-			xil_printf(" 0) Write value to potentiometer\n\r");
-			xil_printf(" 1) Read value from potentiometer\n\r");
-			xil_printf(" 2) Store value to EEPROM\n\r");
-			xil_printf(" 3) Read value from EEPROM\n\r");
-			xil_printf("*************TEMPERATURE SENSOR*************\n\r");
-			xil_printf(" 4) Read temperature\n\r");
+		case 11: //Set High Voltage	//only works for 4 HV connections for now (should only be 4 per board)
+			IIC_SLAVE_ADDR=&IIC_SLAVE_ADDR1;
+			cntrl = 0x1; //command 1 - write contents of serial register data to RDAC - see AD5144 datasheet pg 26
 
-			ReadCommandPoll();
-			menusel = 99999;
-			sscanf(RecvBuffer,"%01u",&menusel);
-			if( menusel < 0 || menusel > 4) { xil_printf("Invalid command.\n\r"); sleep(1); continue; }
-
-			switch(menusel){
-			case 0:	//Write Pots
-				IIC_SLAVE_ADDR=&IIC_SLAVE_ADDR1;
-				cntrl = 0x1; //command 1 - write contents of serial register data to RDAC - see AD5144 datasheet pg 26
-				xil_printf(" Enter a value from 1-256 taps to write to the potentiometer  \n\r");
-				ReadCommandPoll();
-				sscanf(RecvBuffer,"%u",&data_bits);
-				if(data_bits < 1 || data_bits > 256) { xil_printf("Invalid number of taps.\n\r"); sleep(1); continue; }
-				xil_printf(" Enter a number 1-4 to select a particular potentiometer to adjust or 5 for all potentiometers  \n\r");
-				ReadCommandPoll();
-				sscanf(RecvBuffer,"%01u",&rdac);
-				if(rdac < 1 || rdac > 5) { xil_printf("Invalid pot selection.\n\r"); sleep(1); continue; }
-				xil_printf("%d \t %d \n\r", data_bits, rdac);
-
+			iscanfReturn = sscanf(RecvBuffer + 2 + 1, " %d_%d", &rdac, &data_bits);
+			if((rdac >= 1)&&(rdac <= 5) && (data_bits >=1) && (data_bits <= 256))
+			{
 				switch(rdac){
 				case 1:
 					pot_addr = 0x0;
@@ -446,147 +444,60 @@ int main()
 					pot_addr = 0x8;
 					break;
 				default:
-					xil_printf("Invalid. No changes made.");
+					pot_addr = 0xF;	//error val? Want to make sure this doesn't set anything
 					break;
 				}
 
 				a = cntrl<<4|pot_addr;
 				i2c_Send_Buffer[0] = a;
 				i2c_Send_Buffer[1] = data_bits;
-				Status = IicPsMasterSend(IIC_DEVICE_ID, i2c_Send_Buffer, i2c_Recv_Buffer, IIC_SLAVE_ADDR);
-				break;
-			case 1:	//Read Pots
-				IIC_SLAVE_ADDR=&IIC_SLAVE_ADDR1;
-				cntrl = 0x3; //command 3 - read back contents - see AD5144 datasheet pg 26
-				xil_printf(" Enter a number 1-4 to select which potentiometer to read value  \n\r");
-				ReadCommandPoll();
-				sscanf(RecvBuffer,"%01d",&rdac);
-				if(rdac < 1 || rdac > 4) { xil_printf("Invalid pot selection.\n\r"); sleep(1); continue; }
+				//Status = IicPsMasterSend(IIC_DEVICE_ID, i2c_Send_Buffer, i2c_Recv_Buffer, IIC_SLAVE_ADDR);
 
-				switch(rdac){
-				case 1:
-					pot_addr = 0x0;
-					break;
-				case 2:
-					pot_addr = 0x1;
-					break;
-				case 3:
-					pot_addr = 0x2;
-					break;
-				case 4:
-					pot_addr = 0x3;
-					break;
-				default:
-					xil_printf("Invalid. No changes made.");
-					break;
-				}
+				//Write to the log file what was changed
 
-				a = cntrl<<4|pot_addr;
-				i2c_Send_Buffer[0] = a;
-				i2c_Send_Buffer[1] = 0x3;
-				Status = IicPsMasterSend(IIC_DEVICE_ID, i2c_Send_Buffer, i2c_Recv_Buffer, IIC_SLAVE_ADDR);
-				Status = IicPsMasterRecieve(IIC_DEVICE_ID, i2c_Recv_Buffer, IIC_SLAVE_ADDR);
-				xil_printf("%d \t", i2c_Recv_Buffer[0]);
-				xil_printf("taps\n");
-				break;
-			case 2:	//Write EEPROM
-				IIC_SLAVE_ADDR=&IIC_SLAVE_ADDR1;
-				cntrl = 0x7; //command 9 - Copy RDAC register to EEPROM - see AD5144 datasheet pg 26
-				xil_printf("Select which potentiometer value to store in EEPROM (1-4)   \n\r");
-				ReadCommandPoll();
-				sscanf(RecvBuffer,"%01u",&rdac);
-				if(rdac < 1 || rdac > 4) { xil_printf("Invalid pot selection.\n\r"); sleep(1); continue; }
-				xil_printf("%d \t %d \n\r", data_bits, rdac);
-
-				switch(rdac){
-				case 1:
-					pot_addr = 0x0;
-					break;
-				case 2:
-					pot_addr = 0x1;
-					break;
-				case 3:
-					pot_addr = 0x2;
-					break;
-				case 4:
-					pot_addr = 0x3;
-					break;
-				case 5:
-					pot_addr = 0x8;
-					break;
-				default:
-					xil_printf("Invalid. No changes made.");
-					break;
-				}
-
-				a = cntrl<<4|pot_addr;
-				i2c_Send_Buffer[0] = a;
-				i2c_Send_Buffer[1] = 0x1;
-				Status = IicPsMasterSend(IIC_DEVICE_ID, i2c_Send_Buffer, i2c_Recv_Buffer, IIC_SLAVE_ADDR);
-				break;
-			case 3:	//Read EEPROM
-				IIC_SLAVE_ADDR=&IIC_SLAVE_ADDR1;
-				cntrl = 0x3;//command 3 - Read back contents - see AD5144 datasheet pg 26
-				xil_printf(" Enter a number 1-4 to select which EEPROM to read  \n\r");
-				ReadCommandPoll();
-				sscanf(RecvBuffer,"%01u",&rdac);
-				if(rdac < 1 || rdac > 4) { xil_printf("Invalid pot selection.\n\r"); sleep(1); continue; }
-
-				switch(rdac){
-				case 1:
-					pot_addr = 0x0;
-					break;
-				case 2:
-					pot_addr = 0x1;
-					break;
-				case 3:
-					pot_addr = 0x2;
-					break;
-				case 4:
-					pot_addr = 0x3;
-					break;
-				default:
-					xil_printf("Invalid. No changes made.");
-					break;
-				}
-
-				//data_bits = 0x3;
-				a = cntrl<<4|pot_addr;
-				i2c_Send_Buffer[0] = a;
-				i2c_Send_Buffer[1] = 0x1;
-				Status = IicPsMasterSend(IIC_DEVICE_ID, i2c_Send_Buffer, i2c_Recv_Buffer, IIC_SLAVE_ADDR);
-				Status = IicPsMasterRecieve(IIC_DEVICE_ID, i2c_Recv_Buffer, IIC_SLAVE_ADDR);
-				xil_printf("%d \t", i2c_Recv_Buffer[0]);
-				xil_printf("taps\n");
-				break;
-			case 4:	//Read Temp
-				IIC_SLAVE_ADDR=&IIC_SLAVE_ADDR2;
-				i2c_Send_Buffer[0] = 0x0;
-				i2c_Send_Buffer[1] = 0x0;
-				Status = IicPsMasterSend(IIC_DEVICE_ID, i2c_Send_Buffer, i2c_Recv_Buffer, IIC_SLAVE_ADDR);
-				Status = IicPsMasterRecieve(IIC_DEVICE_ID, i2c_Recv_Buffer, IIC_SLAVE_ADDR);
-				a = i2c_Recv_Buffer[0]<< 5;
-				b = a | i2c_Recv_Buffer[1] >> 3;
-				b /= 16;
-				xil_printf("%d\xf8\x43\n", b);
-				break;
-			default:
-				i = 1;
-				break;
-			}//end of case statement
+				//echo input to user to confirm
+				xil_printf("\r\n%d_%d\r\n",rdac,data_bits);
+			}
+			else
+				xil_printf("FFFFFF\n\r");
 			break;
-		case 15:
-			ffs_res = f_open(&directoryLogFile, cDirectoryLogFile0, FA_READ);
-			dirSize = f_size(&directoryLogFile) - 10;
-			filptr_cDIRFile = 10;
-			dirFileContents = malloc(1 * dirSize + 1);
-			ffs_res = f_lseek(&directoryLogFile, 10);
-			ffs_res = f_read(&directoryLogFile, dirFileContents, dirSize, &numBytesRead);
-			ffs_res = f_close(&directoryLogFile);
-			snprintf(dirFileContents, dirSize + 1, dirFileContents + '\0');
-			xil_printf(dirFileContents);
-			free(dirFileContents);
+		case 12: //Set Integration Times
+			iscanfReturn = sscanf(RecvBuffer + 3 + 1, " %d_%d_%d_%d", &iintegrationTimes[0], &iintegrationTimes[1], &iintegrationTimes[2], &iintegrationTimes[3]);
+
+			if((iintegrationTimes[0] < iintegrationTimes[1]) && ( iintegrationTimes[1] < iintegrationTimes[2]) && (iintegrationTimes[2] < iintegrationTimes[3]))	//if each is greater than the last
+			{
+				Xil_Out32 (XPAR_AXI_GPIO_0_BASEADDR, (u32)((iintegrationTimes[0]+52)/4));	//compute and change the values
+				Xil_Out32 (XPAR_AXI_GPIO_1_BASEADDR, (u32)((iintegrationTimes[1]+52)/4));
+				Xil_Out32 (XPAR_AXI_GPIO_2_BASEADDR, (u32)((iintegrationTimes[2]+52)/4));
+				Xil_Out32 (XPAR_AXI_GPIO_3_BASEADDR, (u32)((iintegrationTimes[3]+52)/4));
+
+				dTime += 1;
+				iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "Set integration times to %d %d %d %d %f ", (iintegrationTimes[0]+52)/4, (iintegrationTimes[0]+52)/4, (iintegrationTimes[0]+52)/4, (iintegrationTimes[0]+52)/4, dTime);
+				ffs_res = f_open(&logFile, cLogFile, FA_OPEN_ALWAYS | FA_WRITE);
+				if(ffs_res){
+					xil_printf("Could not open file %d\r\n", ffs_res);
+					break;
+				}
+				ffs_res = f_lseek(&logFile, filptr_clogFile);
+				ffs_res = f_write(&logFile, cWriteToLogFile, iSprintfReturn, &numBytesWritten);
+				filptr_clogFile += numBytesWritten;
+				snprintf(cWriteToLogFile, 10, "%d", filptr_clogFile);							// Write that to a string for saving
+				ffs_res = f_lseek(&logFile, (10 - LNumDigits(filptr_clogFile)));				// Seek to the beginning of the file skipping the leading zeroes
+				ffs_res = f_write(&logFile, cWriteToLogFile, LNumDigits(filptr_clogFile), &numBytesWritten); // Write the new file pointer
+				ffs_res = f_close(&logFile);
+
+				xil_printf("\r\n%d_%d_%d_%d\r\n", iintegrationTimes[0], iintegrationTimes[1], iintegrationTimes[2], iintegrationTimes[3]);
+			}
+			else
+				xil_printf("\r\nFFFFFF\r\n");
+			break;
+		case 13: //Set Calibration Parameters
+			//these will modify the energy calculation in read_data_in
+			iscanfReturn = sscanf(RecvBuffer + 4 + 1, " %f_%f", &fEnergySlope, &fEnergyIntercept);
+			xil_printf("\r\n%d_%d\r\n",(int)fEnergySlope, (int)fEnergyIntercept);
+			break;
 		default :
+			xil_printf("FFFFFF\r\n");
 			break;
 		} // End Switch-Case Menu Select
 
@@ -684,7 +595,7 @@ int ReadCommandPoll() {
 	int i = 0; 				// index
 	XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);	// Clear UART Read Buffer
 	for (i=0; i<32; i++ ) { RecvBuffer[i] = '_'; }			// Clear RecvBuffer Variable
-	while (!(RecvBuffer[rbuff-1] == '\n' || RecvBuffer[rbuff-1] == '\r' || RecvBuffer[rbuff-1] == 'd')) {
+	while (!(RecvBuffer[rbuff-1] == '\n' || RecvBuffer[rbuff-1] == '\r')) {
 		rbuff += XUartPs_Recv(&Uart_PS, &RecvBuffer[rbuff],(32 - rbuff));
 		sleep(0.1);			// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 0.1 s
 	}
@@ -692,95 +603,6 @@ int ReadCommandPoll() {
 
 }
 //////////////////////////// ReadCommandPoll////////////////////////////////
-// This function takes in the RecvBuffer read in by readcommandpoll() and
-// determines what the input was and returns an int to main which indicates
-// that value. It also places the 'leftover' part of the buffer into a separate
-// buffer with just that number(s)/filename/other for ease of use.
-int ReadCommand(u8 * RecvBuffer) {
-	u32 rbuff = 0;			// read buffer size returned
-	int ret = 0;
-
-	XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);	// Clear UART Read Buffer
-	while (!(RecvBuffer[rbuff-1] == '\n' || RecvBuffer[rbuff-1] == '\r' || RecvBuffer[rbuff-1] == 'd')) {
-				rbuff += XUartPs_Recv(&Uart_PS, RecvBuffer + rbuff, 32 - rbuff);
-	}
-
-	int commandNum = 999;	//this value tells the main menu what command we read from the rs422 buffer
-	int firstVal = 0;
-	int secondVal = 0;
-	int thirdVal = 0;
-	int fourthVal = 0;
-	u8 commandBuffer[20] = "";
-
-	ret = sscanf(RecvBuffer, " %[^_]", commandBuffer);	//copy the command (everything before the underscore)
-	if(!strcmp(commandBuffer, "INT"))
-	{
-		//copy over the integrals
-		ret = sscanf(RecvBuffer + strlen(commandBuffer) + 1, " %d %d %d %d", &firstVal, &secondVal, &thirdVal, &fourthVal);
-
-		//check the result and see if input from the user was correct
-		if(ret < 4 && ret > -1)
-		{
-			//not enough numbers given
-			xil_printf("Invalid input, too few integration times given.\n\r");
-			commandNum = -1;
-		}
-		else if((ret <= -1) || (ret > 4))
-		{
-			//invalid input, return a message indicating failure and return to main menu
-			//too many ints or fail to read
-			xil_printf("Invalid input, too many or no integration times given.\n\r");
-			commandNum = -1;
-		}
-		else
-		{
-			commandNum = 4; //indicates we want to set the integral values
-			xil_printf("All four integration times received.\n\r");
-		}
-	}
-	else if(!strcmp(commandBuffer, "THR"))
-	{
-		ret = sscanf(RecvBuffer + strlen(commandBuffer) + 1, " %d", &firstVal);	//check that there is one int after the underscore
-
-		if(ret != 1)	//invalid input
-		{
-			xil_printf("Invalid input; wrong number of thresholds.\n\r");
-			commandNum = -1;
-		}
-		else			//proper input
-		{
-			commandNum = 3;
-			xil_printf("Received a new threshold.\n\r");
-		}
-	}
-	else if(!strcmp(commandBuffer, "DAQ"))
-	{
-		ret = sscanf(RecvBuffer + strlen(commandBuffer) + 1, " %d", &firstVal);	//check that there is one int after the underscore // may need a larger value here to take a 64-bit time
-
-		if(ret != 1)	//invalid input
-		{
-			xil_printf("Invalid input; real time not recognized.\n\r");
-			commandNum = -1;
-		}
-		else			//proper input
-		{
-			commandNum = 2;
-			xil_printf("Received DAQ command. Real time is: %d\n\r", firstVal);
-		}
-	}
-	else
-	{
-		xil_printf("Invalid input; did not detect a command.\n\r");
-		commandNum = -1;
-	}
-
-	//...each else if will be a different possible input with a unique return value
-	// a negative return value indicates failure, a positive value indicates success
-	// each command can have a small (~10) range of values that can be used to diagnose errors?
-	// if we are writing back what went wrong, then we just need one error return value...make it -1
-
-	return commandNum;
-}
 
 //////////////////////////// PrintData ////////////////////////////////
 int PrintData( ){
@@ -817,9 +639,10 @@ void ClearBuffers() {
 //////////////////////////// Clear Processed Data Buffers ////////////////////////////////
 
 //////////////////////////// DAQ ////////////////////////////////
-int DAQ(){
-	int buffsize; 	//BRAM buffer size
-	int dram_addr;	// DRAM Address
+int DAQ(float fEnergySlope, float fEnergyIntercept){
+	int pollReturn = 0;
+	int buffsize = 0; 	//BRAM buffer size
+	//int dram_addr = 0;	// DRAM Address
 	static int filesWritten = 0;
 
 	XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);
@@ -829,15 +652,13 @@ int DAQ(){
 	sleep(1);						// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 1 s
 	ClearBuffers();												// Clear Buffers.
 	// Capture garbage in DRAM
-	for (dram_addr = 0xa000000; dram_addr <= 0xA004000; dram_addr+=4){Xil_In32(dram_addr);}
+	//for (dram_addr = 0xa000000; dram_addr <= 0xA004000; dram_addr+=4){Xil_In32(dram_addr);}
 
 	while(1){
-		buffsize = Xil_In32 (XPAR_AXI_GPIO_11_BASEADDR);
-		if (!sw) { sw = XGpioPs_ReadPin(&Gpio, SW_BREAK_GPIO); } //read pin
-		XUartPs_Recv(&Uart_PS, &RecvBuffer, 32);
-		if ( RecvBuffer[0] == 'q' ) { sw = 1; }
-		if(sw) { return sw;	}
+		pollReturn = ReadCommandType(RecvBuffer, &Uart_PS);	//check each time through for a 'break'
+		if(pollReturn==14){return 1;}						//received 'break'
 
+		buffsize = Xil_In32 (XPAR_AXI_GPIO_11_BASEADDR);	//how full are the buffers?
 		if(buffsize >= 4095){
 			Xil_Out32 (XPAR_AXI_GPIO_15_BASEADDR, 1);
 			Xil_Out32 (XPAR_AXI_DMA_0_BASEADDR + 0x48, 0xa000000);
@@ -846,7 +667,7 @@ int DAQ(){
 			Xil_Out32 (XPAR_AXI_GPIO_15_BASEADDR, 0);
 			Xil_Out32(XPAR_AXI_GPIO_9_BASEADDR,1);
 			Xil_Out32(XPAR_AXI_GPIO_9_BASEADDR,0);
-			sw = ReadDataIn(filesWritten, &directoryLogFile);
+			sw = ReadDataIn(fEnergySlope, fEnergyIntercept, filesWritten, &directoryLogFile);
 			++filesWritten;
 		}
 	}
@@ -859,7 +680,7 @@ int DAQ(){
 
 int getWFDAQ(){
 	int buffsize; 	//BRAM buffer size
-	int dram_addr;	// DRAM Address
+	//int dram_addr;	// DRAM Address
 
 	XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);
 

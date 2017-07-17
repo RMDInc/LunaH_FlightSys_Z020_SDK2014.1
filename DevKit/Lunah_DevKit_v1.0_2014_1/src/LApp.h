@@ -31,6 +31,9 @@
 
 // IiC Interface
 //#include "LI2C_Interface.h"
+#include "read_data_in.h"
+#include "ReadCommandType.h"
+#include "TransferFiles.h"
 
 /* Globals */
 #define LOG_FILE_BUFF_SIZE	120
@@ -38,6 +41,7 @@
 #define SW_BREAK_GPIO		51
 #define IIC_DEVICE_ID		XPAR_XIICPS_0_DEVICE_ID
 #define TEST_BUFFER_SIZE	2
+#define FILENAME_SIZE		50
 
 // Hardware Interface
 XUartPs Uart_PS;					// Instance of the UART Device
@@ -73,29 +77,7 @@ char * dirFileContents;
 
 /* UART Variables */
 static u8 SendBuffer[32];		// Buffer for Transmitting Data	// Used for RecvCommandPoll()
-static u8 RecvBuffer[32];		// Buffer for Receiving Data
-
-/* Menu Select Variable */
-int	menusel = 99999;	// Menu Select
-
-/* Set Mode Variables */
-int mode = 9;			// Mode of Operation
-
-/* Set Enable State Variables */
-int enable_state = 0; 	// 0: disabled, 1: enabled
-
-/* Set Threshold Variables */
-int iThreshold0 = 0;	// Trigger Threshold
-int iThreshold1 = 0;	// Beginning value of the trigger threshold
-
-/* Set Integration Times Arrays */
-char updateint = 'N';	// switch to change integral values
-u32 setIntsArray[8] = {};
-u32 setSamples[4] = {};
-int setBL = 0;
-int setSI = 0;
-int setLI = 0;
-int setFI = 0;
+static char RecvBuffer[32];		// Buffer for Receiving Data
 
 /* Check the size of the BRAM Buffer */
 u32 databuff = 0;		// size of the data buffer
@@ -125,12 +107,12 @@ int InitializeInterruptSystem(u16 deviceID);
 void InterruptHandler (void );
 int SetUpInterruptSystem(XScuGic *XScuGicInstancePtr);
 int ReadCommandPoll();				// Read Command Poll Function
-int ReadCommand(u8 * recvBuffer);	// Read the command from the RS422
+//int ReadCommand(u8 * recvBuffer);	// Read the command from the RS422
 void SetIntegrationTimes();			// Set the Registers forIntegral Times
 int PrintData();					// Print Data to the Terminal Window
 void ClearBuffers();				// Clear Processed Data Buffers
-int DAQ();							// Clear Processed Data Buffers
-int ReadDataIn(int numfilesWritten, FIL * filObj);// Take data from DRAM, process it, save it to SD
+int DAQ(float fEnergySlope, float fEnergyIntercept);							// Clear Processed Data Buffers
+//int ReadDataIn(int numfilesWritten, FIL * filObj);// Take data from DRAM, process it, save it to SD
 int getWFDAQ();						// Print data skipping saving it to SD card
 int LNumDigits(int number);			// Determine the number of digits in an int
 

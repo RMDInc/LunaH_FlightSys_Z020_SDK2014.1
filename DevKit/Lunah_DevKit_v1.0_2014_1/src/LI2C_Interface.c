@@ -7,6 +7,12 @@
 
 #include "LI2C_Interface.h"
 
+/* Declare Variables */
+XIicPs Iic;					//Instance of the IIC device
+int * iI2C_slave_addr;
+int iStatus = 0;
+int iIndex = 0;
+
 /*****************************************************************************/
 /**
 *
@@ -17,6 +23,10 @@
 *
 * @param	DeviceId is the Device ID of the IicPs Device and is the
 *		XPAR_<IICPS_instance>_DEVICE_ID value from xparameters.h
+*
+* @param	Pointer to a buffer to send
+*
+* @param	Pointer to a buffer to receive data from the device
 *
 * @return	XST_SUCCESS if successful, otherwise XST_FAILURE.
 *

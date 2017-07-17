@@ -7,15 +7,36 @@
 
 #include "read_data_in.h"
 
-int ReadDataIn(int numFilesWritten, FIL * directoryLogFileObject){
+int ReadDataIn(float fEnergySlope, float fEnergyIntercept, int numFilesWritten, FIL * directoryLogFileObject){
+
+	///// General Variables /////
+	//XUartPs Uart_PS;			// Instance of the UART Device
+	//XGpioPs Gpio;				// Instance of the GPIO Driver Interface
+
+	int sw = 0;						// switch to stop and return to main menu  0= default.  1 = return
+	//u8 RecvBuffer[32];			// Buffer for receiving data, made global GS
+
+	u32 data;
+	int dram_ceiling;
+	int dram_addr, array_index, diff;
+	double bl1, bl2, bl3, bl4, bl_avg;	// bl_sum;
+	long long howFar;
+
+	//FIL file;
+	//FATFS fatfs;
+	FILINFO finfo;
+	int iwrPtr = 0;
+	char wrPtrBuff[11] = {};		// Holds 10 numbers and a null terminator
+	char cDirectoryLogFile1[] = "DirectoryFile.txt";	//Directory File to hold all filenames
+	uint iBytesRead = 0;
+	uint iBytesWritten = 0;
+	int iSprintfRet = 0;
 
 	struct event_raw *data_array;
-	data_array = (double *)malloc(sizeof(double)*512);
+	data_array = (struct event_raw *)malloc(sizeof(double)*512);
 
 	array_index = 0;
 	dram_addr = 0;
-	nevents = 0;
-	//bl_sum = 0;
 	bl1 = 0.0;
 	bl2 = 0.0;
 	bl3 = 0.0;
@@ -52,7 +73,7 @@ int ReadDataIn(int numFilesWritten, FIL * directoryLogFileObject){
 			data_array[array_index].li = ((double)Xil_In32(dram_addr + 24) / 16.0) - bl_avg * 169.0;
 			data_array[array_index].fi = ((double)Xil_In32(dram_addr + 28) / 16.0) - bl_avg * 1551.0;
 			data_array[array_index].psd = data_array[array_index].si / (data_array[array_index].li - data_array[array_index].si);
-			data_array[array_index].energy = 1.0 * data_array[array_index].fi + 0.0;
+			data_array[array_index].energy = fEnergySlope * data_array[array_index].fi + fEnergyIntercept;
 			++array_index;
 			dram_addr = dram_addr + 32;		//align the loop with the data
 		}
@@ -62,7 +83,6 @@ int ReadDataIn(int numFilesWritten, FIL * directoryLogFileObject){
 	}	// end of while loop
 
 	static FIL file1;
-	//static FATFS fatfs;
 	char filenameBin[20] = {};
 
 	FRESULT res;				// Return variable for SD functions
@@ -80,19 +100,21 @@ int ReadDataIn(int numFilesWritten, FIL * directoryLogFileObject){
 	if ( f_stat(filenameBin, &finfo) ){	// when 1 we add to the file, 0 does not trigger the if()	// before we get to the main save loop, interrogate to see if the file already exists
 		res = f_open(directoryLogFileObject, cDirectoryLogFile1, FA_READ|FA_WRITE);
 		res = f_lseek(directoryLogFileObject, 0);
-		res = f_read(directoryLogFileObject, wrPtrBuff, 10, &inumBytesRead);
+		res = f_read(directoryLogFileObject, wrPtrBuff, 10, &iBytesRead);
 		sscanf(wrPtrBuff, "%d", &iwrPtr);				//take the write pointer from char -> integer so we may use it
 		res = f_lseek(directoryLogFileObject, iwrPtr);	//move the write pointer so we don't overwrite info
-		res = f_write(directoryLogFileObject, filenameBin, iSprintfRet, &inumBytesWritten);	//add the new file name
-		iwrPtr += inumBytesWritten;						//update the write pointer
+		res = f_write(directoryLogFileObject, filenameBin, iSprintfRet, &iBytesWritten);	//add the new file name
+		iwrPtr += iBytesWritten;						//update the write pointer
 		res = f_lseek(directoryLogFileObject, 0);		//seek to beginning again
 		snprintf(wrPtrBuff, 10, "%d", iwrPtr);			// Write that integer to a string for saving
 		res = f_lseek(directoryLogFileObject, (10 - LNumDigits(iwrPtr)));	// Seek to the beginning of the file skipping the leading zeroes
-		res = f_write(directoryLogFileObject, wrPtrBuff, LNumDigits(iwrPtr), &inumBytesWritten); // Write the new file pointer
+		res = f_write(directoryLogFileObject, wrPtrBuff, LNumDigits(iwrPtr), &iBytesWritten); // Write the new file pointer
 		res = f_close(directoryLogFileObject);
 	}
 
 	res = f_open(&file1, filenameBin, FA_OPEN_ALWAYS | FA_WRITE);	// Open the file if it exists, if not create a new file; file has write permission
+	if(res)
+		sw = 1;
 	howFar = 36720 * numFilesWritten;					// Calculate where to put the file pointer for writing
 	res = f_lseek(&file1, howFar);						// Move the file write pointer to somewhere in the file
 	res = f_write(&file1, (const void*)data_array, fileSize, &numBytesWritten);	// Write the array data from above to the file, returns the #bytes written
