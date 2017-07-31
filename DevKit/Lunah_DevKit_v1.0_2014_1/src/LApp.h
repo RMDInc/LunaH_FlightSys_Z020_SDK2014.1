@@ -34,6 +34,7 @@
 #include "read_data_in.h"
 #include "ReadCommandType.h"
 #include "TransferFiles.h"
+#include "WriteToLogFile.h"
 
 /* Globals */
 #define LOG_FILE_BUFF_SIZE	120
@@ -45,6 +46,7 @@
 
 // Hardware Interface
 XUartPs Uart_PS;					// Instance of the UART Device
+XUartPsFormat Uart_Format;			// Specifies the format we have
 XGpioPs Gpio;						// Instance of the GPIO Driver Interface
 XGpioPs_Config *GPIOConfigPtr;		// GPIO configuration pointer
 static XScuGic_Config *GicConfig; 	// GicConfig
@@ -60,7 +62,7 @@ char cZeroBuffer[] = "0000000000 ";
 char cLogFile[] = "LogFile.txt";	//Create a log file and file pointer
 FIL logFile;
 char filptr_buffer[11] = {};		// Holds 10 numbers and a null terminator
-int filptr_clogFile = 0;
+int filptr_clogFile;
 char cDirectoryLogFile0[] = "DirectoryFile.txt";	//Directory File to hold all filenames
 FIL directoryLogFile;
 char filptr_cDIRFile_buffer[11] = {};
@@ -107,12 +109,10 @@ int InitializeInterruptSystem(u16 deviceID);
 void InterruptHandler (void );
 int SetUpInterruptSystem(XScuGic *XScuGicInstancePtr);
 int ReadCommandPoll();				// Read Command Poll Function
-//int ReadCommand(u8 * recvBuffer);	// Read the command from the RS422
 void SetIntegrationTimes();			// Set the Registers forIntegral Times
 int PrintData();					// Print Data to the Terminal Window
 void ClearBuffers();				// Clear Processed Data Buffers
 int DAQ(float fEnergySlope, float fEnergyIntercept);							// Clear Processed Data Buffers
-//int ReadDataIn(int numfilesWritten, FIL * filObj);// Take data from DRAM, process it, save it to SD
 int getWFDAQ();						// Print data skipping saving it to SD card
 int LNumDigits(int number);			// Determine the number of digits in an int
 
