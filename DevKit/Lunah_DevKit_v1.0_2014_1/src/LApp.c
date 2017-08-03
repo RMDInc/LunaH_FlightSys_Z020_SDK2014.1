@@ -263,8 +263,8 @@ int main()
 			iscanfReturn = sscanf(RecvBuffer + 3 + 1, " %d", &iorbitNumber);
 
 			//create files and pass in filename to readDataIn function
-			snprintf(cEVTFileName, 50, "%d_%d_evt.bin",iorbitNumber, idaqRunNumber);	//assemble the filename for this DAQ run
-			snprintf(cCNTFileName, 50, "%d_%d_cnt.bin",iorbitNumber, idaqRunNumber);	//assemble the filename for this DAQ run
+			snprintf(cEVTFileName, 50, "%04d_%04d_evt.bin",iorbitNumber, idaqRunNumber);	//assemble the filename for this DAQ run
+			snprintf(cCNTFileName, 50, "%04d_%04d_cnt.bin",iorbitNumber, idaqRunNumber);	//assemble the filename for this DAQ run
 			iSprintfReturn = snprintf(cReportBuff, 100, "%s_%s", cEVTFileName, cCNTFileName);			//create the string to tell CDH
 			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);						//report to CDH
 
@@ -344,8 +344,8 @@ int main()
 			sleep(1);
 
 			//create files and pass in filename to readDataIn function
-			snprintf(cWFDFileName, 50, "%d_%d_wfd.bin",iorbitNumber, iwfRunNumber);	//assemble the filename for this DAQ run
-			snprintf(cCNTFileName, 50, "%d_%d_cnt.bin",iorbitNumber, iwfRunNumber);
+			snprintf(cWFDFileName, 50, "%04d_%04d_wfd.bin",iorbitNumber, iwfRunNumber);	//assemble the filename for this DAQ run
+			snprintf(cCNTFileName, 50, "%04d_%04d_cnt.bin",iorbitNumber, iwfRunNumber);
 
 			iSprintfReturn = snprintf(cReportBuff, 100, "%s_%s", cWFDFileName, cCNTFileName);		//create the string to tell CDH
 			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);						//report to CDH
