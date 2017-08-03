@@ -37,7 +37,7 @@
 #include "WriteToLogFile.h"
 
 /* Globals */
-#define LOG_FILE_BUFF_SIZE	120
+#define LOG_FILE_BUFF_SIZE	200
 #define UART_DEVICEID		XPAR_XUARTPS_0_DEVICE_ID
 #define SW_BREAK_GPIO		51
 #define IIC_DEVICE_ID		XPAR_XIICPS_0_DEVICE_ID

@@ -39,10 +39,6 @@ int main()
 	//test variables
 	int sent = 0;
 	int returnVal = 0;
-	u8 testBuff[25] = "HeLlO ThErE";
-	u8 testBuff2[] = "123456789012345678901234567890123456789012345678912345678901234567890123456789012345678901234567891234567890123456789012345678901234567890123456789";
-	char testBuff3[] = "abcdefghijklmnopqrstuvwxyz1234567890zyxwvutsrqponmlkjihgfedcba0987654321";
-	char testBuff4[200] = "";
 	int bytesSent = 0;
 
 	//transfer file variables
@@ -61,6 +57,9 @@ int main()
 	unsigned int numBytesWritten = 0;	//try unsigned int instead of uint
 	char cZeroFile[] = "ZeroFile.txt";	//Create a log file and file pointer
 	char cZeroData[] = "10101010";
+	double dZeroData[] = {12345.54321,12345.54321,12345.54321,12345.54321,12345.54321,12345.54321,12345.54321,12345.54321};
+//	double * data_array;
+//	data_array = (double *)malloc(sizeof(double)*1);
 
 	//case 2
 	int iTmpSetTemp = 0;
@@ -200,48 +199,6 @@ int main()
 	}
 	// *********** Mount SD Card and Initialize Variables ****************//
 
-	// ******************* testing RS422 ******************//
-	//while(!(XUartPs_IsSending(&Uart_PS)));	//wait for the uart to be done
-	//bytesSent = XUartPs_Send(&Uart_PS, &testBuff,20);	//send a string
-	//xil_printf("\r\nb:%d\r\n",bytesSent);
-	//sleep(1);
-	//while(!(XUartPs_IsSending(&Uart_PS)));	//wait for the uart to be done
-	//bytesSent = XUartPs_Send(&Uart_PS, &testBuff2, 50);
-	//xil_printf("\r\nb:%d\r\n",bytesSent);
-
-/*	int sent = 0;
-	int returnVal = 0;
-	xil_printf("tB2: %d\n",sizeof(testBuff2));
-	xil_printf("tB3: %d\n",sizeof(testBuff3));
-	while(1)
-	{
-		returnVal = XUartPs_Send(&Uart_PS, &(testBuff2[0]) + sent, sizeof(testBuff2) - sent);	//testBuff2 should be ~150 chars	//pointer arithmetic doesn't work here because the arrays have not decayed into pointers!!!
-		sent += returnVal;			//we want to start farther into the buffer each round
-		if(sent == sizeof(testBuff2))	//if we have sent the same number of bytes as the size of the buffer, we are done
-			break;
-	}
-	sent = 0;
-	returnVal = 0;
-	while(1)
-	{
-		returnVal = XUartPs_Send(&Uart_PS, &(testBuff3[0]) + sent, sizeof(testBuff3) - sent);	//explicitly use the address of the first element of the array so we may use pointer arithmetic
-		sent += returnVal;			//we want to start farther into the buffer each round
-		if(sent == sizeof(testBuff3))	//if we have sent the same number of bytes as the size of the buffer, we are done
-			break;
-	}
-	sent = 0;
-	returnVal = 0;
-	iSprintfReturn = snprintf(testBuff4, 200, "abcdefghijklmnopqrstuvwxyz1234567890zyxwvutsrqponmlkjihgfedcba0987654321abcdefghijklmnopqrstuvwxyz1234567890zyxwvutsrqponmlkjihgfedcba0987654321");
-	while(1)
-	{
-		returnVal = XUartPs_Send(&Uart_PS, &(testBuff4[0]) + sent, iSprintfReturn - sent);
-		sent += returnVal;			//we want to start farther into the buffer each round
-		if(sent == iSprintfReturn)	//if we have sent the same number of bytes as the size of the buffer, we are done
-			break;
-	}*/
-
-	// ******************* testing RS422 ******************//
-
 	// ******************* POLLING LOOP *******************//
 	while(1){
 		XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);	// Clear UART Read Buffer
@@ -253,12 +210,17 @@ int main()
 			memset(RecvBuffer, '\0', 32);							// Clear RecvBuffer Variable
 			imenusel = ReadCommandType(RecvBuffer, &Uart_PS);
 
-			//now use the return value to figure out what to do with this information1
-			if ( imenusel >= 0 && imenusel <= 17 )
+			//now use the return value to figure out what to do with this information
+
+			if ( imenusel >= -1 && imenusel <= 17 )
 				break;
 		}
 
 		switch (imenusel) { // Switch-Case Menu Select
+		case -1:
+			iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF");
+			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+			break;
 		case 0:	//Capture Processed Data;
 			iscanfReturn = sscanf(RecvBuffer + 3 + 1, " %d", &iorbitNumber);
 
@@ -310,11 +272,18 @@ int main()
 				uiTotalNeutronsPSD += 25;
 				uiLocalTime += 1;
 
-				//write zeroes to a file code
+				//write zeroes to a file
 				returnValue = f_open(&zeroFile, cCNTFileName, FA_OPEN_ALWAYS | FA_WRITE);
 				returnVal = f_size(&zeroFile);
 				returnValue = f_lseek(&zeroFile, returnVal);
-				returnValue = f_write(&zeroFile, cZeroData, 8, &numBytesWritten);
+				returnValue = f_write(&zeroFile, dZeroData, sizeof(dZeroData), &numBytesWritten);
+				returnValue = f_close(&zeroFile);
+
+				//write zeroes to the other file
+				returnValue = f_open(&zeroFile, cEVTFileName, FA_OPEN_ALWAYS | FA_WRITE);
+				returnVal = f_size(&zeroFile);
+				returnValue = f_lseek(&zeroFile, returnVal);
+				returnValue = f_write(&zeroFile, dZeroData, sizeof(dZeroData), &numBytesWritten);
 				returnValue = f_close(&zeroFile);
 
 				sleep(2);
@@ -345,10 +314,10 @@ int main()
 
 			//create files and pass in filename to readDataIn function
 			snprintf(cWFDFileName, 50, "%04d_%04d_wfd.bin",iorbitNumber, iwfRunNumber);	//assemble the filename for this DAQ run
-			snprintf(cCNTFileName, 50, "%04d_%04d_cnt.bin",iorbitNumber, iwfRunNumber);
+			//snprintf(cCNTFileName, 50, "%04d_%04d_cnt.bin",iorbitNumber, iwfRunNumber);
 
-			iSprintfReturn = snprintf(cReportBuff, 100, "%s_%s", cWFDFileName, cCNTFileName);		//create the string to tell CDH
-			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);						//report to CDH
+			iSprintfReturn = snprintf(cReportBuff, 100, "%s", cWFDFileName);		//create the string to tell CDH
+			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);		//report to CDH
 
 			//begin polling for either 'break', 'end', or 'START'
 			memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
@@ -374,7 +343,7 @@ int main()
 			Xil_Out32(XPAR_AXI_GPIO_14_BASEADDR, 0);	//enable processed data
 			Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 1);	//enables system???
 
-			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "WF run %s %s %llu ", cEVTFileName, cWFDFileName, iRealTime);
+			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "WF run %s %llu ", cWFDFileName, iRealTime);
 			WriteToLogFile(cWriteToLogFile, iSprintfReturn);
 
 			//Begin collecting data
@@ -396,10 +365,10 @@ int main()
 				uiLocalTime += 1;
 
 				//write zeroes to a file code
-				returnValue = f_open(&zeroFile, cCNTFileName, FA_OPEN_ALWAYS | FA_WRITE);
+				returnValue = f_open(&zeroFile, cWFDFileName, FA_OPEN_ALWAYS | FA_WRITE);
 				returnVal = f_size(&zeroFile);
 				returnValue = f_lseek(&zeroFile, returnVal);
-				returnValue = f_write(&zeroFile, cZeroData, 8, &numBytesWritten);
+				returnValue = f_write(&zeroFile, dZeroData, sizeof(dZeroData), &numBytesWritten);
 				returnValue = f_close(&zeroFile);
 
 				sleep(2);
@@ -438,7 +407,7 @@ int main()
 			//xil_printf("%d\xf8\x43\n", b);
 			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
 			memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
-			for(iterator = 0;iterator < iTmpTimeout; iterator++)
+			for(iterator = 1; iterator < iTmpTimeout; iterator++)
 			{
 				ipollReturn = PollUart(RecvBuffer, &Uart_PS);
 				if(ipollReturn == 14 || ipollReturn == 17)	//14=break, 17=ENDTMP_
@@ -572,25 +541,6 @@ int main()
 			}
 
 			returnValue = f_close(&fnoFileToTransfer);
-
-/*			ffs_res = f_open(&directoryLogFile, cDirectoryLogFile0, FA_READ);	//open the directory log file
-			dirSize = f_size(&directoryLogFile) - 10;							//we don't want the first 10 bits
-			filptr_cDIRFile = 10;												//set the read pointer after those bits
-			dirFileContents = (char *)malloc(1 * dirSize + 1);					//reserve space for the file to be read to	//this is one char for each byte in the file
-			ffs_res = f_lseek(&directoryLogFile, 10);							//move to the beginning of the file
-			ffs_res = f_read(&directoryLogFile, dirFileContents, dirSize, &numBytesRead);	//read the file contents to dirFileContents
-			ffs_res = f_close(&directoryLogFile);								//close the log file
-			iSprintfReturn = snprintf(dirFileContents, dirSize + 1, dirFileContents + '\0');		//append a null terminator
-			sent = 0;
-			returnVal = 0;
-			while(1)
-			{
-				returnVal = XUartPs_Send(&Uart_PS, &dirFileContents + sent, iSprintfReturn - sent);	//explicitly use the address of the first element of the array so we may use pointer arithmetic
-				sent += returnVal;			//we want to start farther into the buffer each round
-				if(sent == iSprintfReturn)	//if we have sent the same number of bytes as the size of the buffer, we are done
-					break;
-			}
-			free(dirFileContents); */											//free the memory reserved by malloc
 			break;
 		case 9: //Set Trigger Threshold
 			iscanfReturn = sscanf(RecvBuffer + 3 + 1," %d", &iTriggerThreshold);	//read in value from the recvBuffer

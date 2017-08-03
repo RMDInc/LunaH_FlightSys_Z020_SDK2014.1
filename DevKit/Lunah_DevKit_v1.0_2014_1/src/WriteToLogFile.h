@@ -13,7 +13,7 @@
 #include "ff.h"
 #include "LNumDigits.h"
 
-#define LOG_FILE_BUFF_SIZE	120
+#define LOG_FILE_BUFF_SIZE	200
 
 int filptr_clogFile;
 

@@ -27,6 +27,13 @@ float ffourthVal;
 unsigned long long int realTime;
 char commandBuffer[10] = "";
 char commandBuffer2[50] = "";
+unsigned int ui_TotalNeutronsPSD = 294967295;
+unsigned int ui_LocalTime = 1234567890;
+int i_AnalogTemp = 12;
+int i_DigitalTemp = 34;
+char c_ReportBuff[100] = "";
+int i_SprintfReturn = 0;
+int ibytesSent = 0;
 
 int ReadCommandType(char * RecvBuffer, XUartPs *Uart_PS) {
 	//Variable definitions
@@ -151,7 +158,7 @@ int ReadCommandType(char * RecvBuffer, XUartPs *Uart_PS) {
 	{
 		ret = sscanf(RecvBuffer + strlen(commandBuffer) + 1, " %f_%f_%f_%f", &ffirstVal, &fsecondVal, &fthirdVal, &ffourthVal);	//check for the _number of the waveform
 
-		if(ret != 2)	//invalid input
+		if(ret != 4)	//invalid input
 		{
 			//xil_printf("Invalid input; wf_number not recognized.\n\r");
 			commandNum = -1;
