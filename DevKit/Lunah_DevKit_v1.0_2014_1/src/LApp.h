@@ -44,6 +44,8 @@
 #define TEST_BUFFER_SIZE	2
 #define FILENAME_SIZE		50
 
+int iPollBufferIndex;
+
 // Hardware Interface
 XUartPs Uart_PS;					// Instance of the UART Device
 XUartPsFormat Uart_Format;			// Specifies the format we have

@@ -29,6 +29,7 @@ int main()
 	unsigned char errorBuff[] = "ERROR";
 	long long int iRealTime = 0;
 	char cWriteBREAK[] = "BREAK requested ";
+	char cBREAK[] = "FAFAFA";
 	int iTriggerThreshold = 0;
 	int ipollReturn = 0;
 	int iintegrationTimes[4] = {};
@@ -65,8 +66,6 @@ int main()
 	int iTmpSetTemp = 0;
 	int iTmpTimeout = 0;
 	//case 3
-	//unsigned char cAnalogTemp = 12;
-	//unsigned char cDigitalTemp = 34;
 	unsigned int uiTotalNeutronsPSD = 294967295;
 	unsigned int uiLocalTime = 1234567890;
 	int iAnalogTemp = 12;
@@ -74,6 +73,8 @@ int main()
 	//case 10
 	float fNCut0 = 0.0;
 	float fNCut1 = 0.0;
+	float fNCut2 = 0.0;
+	float fNCut3 = 0.0;
 	//case 13
 	float fEnergySlope = 1.0;
 	float fEnergyIntercept = 0.0;
@@ -277,6 +278,7 @@ int main()
 			if(ipollReturn == 14)	//if the input was break, leave the loop, go back to menu
 			{
 				Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//disable system
+				bytesSent = XUartPs_Send(&Uart_PS, cBREAK, 6);	//write FAFAFA to indicate to the user that the "BREAK" was successful
 				break;
 			}
 
@@ -296,6 +298,7 @@ int main()
 			//DAQ(fEnergySlope, fEnergyIntercept);
 			uiTotalNeutronsPSD = 0;
 			uiLocalTime = 0;
+			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
 			memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
 			while(1)
 			{
@@ -328,6 +331,7 @@ int main()
 			{
 				Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//disable system
 				WriteToLogFile(cWriteBREAK, sizeof(cWriteBREAK));
+				bytesSent = XUartPs_Send(&Uart_PS, cBREAK, 6);	//write FAFAFA to indicate to the user that the "BREAK" was successful
 			}
 
 			sw = 0;	//reset stop switch
@@ -343,7 +347,7 @@ int main()
 			snprintf(cWFDFileName, 50, "%d_%d_wfd.bin",iorbitNumber, iwfRunNumber);	//assemble the filename for this DAQ run
 			snprintf(cCNTFileName, 50, "%d_%d_cnt.bin",iorbitNumber, iwfRunNumber);
 
-			iSprintfReturn = snprintf(cReportBuff, 100, "%s_%s", cWFDFileName, cCNTFileName);			//create the string to tell CDH
+			iSprintfReturn = snprintf(cReportBuff, 100, "%s_%s", cWFDFileName, cCNTFileName);		//create the string to tell CDH
 			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);						//report to CDH
 
 			//begin polling for either 'break', 'end', or 'START'
@@ -358,6 +362,7 @@ int main()
 			if(ipollReturn == 14)	//if the input was break, leave the loop, go back to menu
 			{
 				Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//disable system
+				bytesSent = XUartPs_Send(&Uart_PS, cBREAK, 6);	//write FAFAFA to indicate to the user that the "BREAK" was successful
 				break;
 			}
 
@@ -377,6 +382,7 @@ int main()
 			//just print out some random data while polling for break, end, etc
 			uiTotalNeutronsPSD = 0;
 			uiLocalTime = 0;
+			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
 			memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
 			while(1)
 			{
@@ -410,6 +416,7 @@ int main()
 			{
 				Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//disable system
 				WriteToLogFile(cWriteBREAK, sizeof(cWriteBREAK));
+				bytesSent = XUartPs_Send(&Uart_PS, cBREAK, 6);	//write FAFAFA to indicate to the user that the "BREAK" was successful
 			}
 
 			sw = 0;	//reset stop switch
@@ -429,6 +436,7 @@ int main()
 			b = a | i2c_Recv_Buffer[1] >> 3;
 			b /= 16;
 			//xil_printf("%d\xf8\x43\n", b);
+			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
 			memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
 			for(iterator = 0;iterator < iTmpTimeout; iterator++)
 			{
@@ -442,6 +450,7 @@ int main()
 			if(ipollReturn == 14)	//if the input was break, leave the loop, go back to menu
 			{
 				WriteToLogFile(cWriteBREAK, sizeof(cWriteBREAK));
+				bytesSent = XUartPs_Send(&Uart_PS, cBREAK, 6);	//write FAFAFA to indicate to the user that the "BREAK" was successful
 			}
 			else if(ipollReturn == 17)	//ENDTMP was issued
 			{
@@ -452,6 +461,8 @@ int main()
 			}
 			else	// timeout was reached
 			{
+				iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d", iAnalogTemp, iTmpTimeout);	//send back what the current temp is plus how long we ran for
+				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);	//send a string
 				//just disable the system, no need to inform that things are ok
 			}
 			break;
@@ -477,6 +488,8 @@ int main()
 			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "file TX %s ", cFileToAccess);
 			WriteToLogFile(cWriteToLogFile, iSprintfReturn);
 
+			sleep(1);	//test if the sd card needs a second to finish writing the file
+
 			returnValue = f_open(&fnoFileToTransfer, cFileToAccess, FA_READ);
 			if(returnValue != FR_OK)
 			{
@@ -488,6 +501,7 @@ int main()
 			sent = 0;
 			returnVal = 0;
 			totalBytesRead = 0;
+			memset(cTransferFileContents, '0', 101);	//reset the buffer
 
 			iFileSize = f_size(&fnoFileToTransfer);
 			returnValue = f_lseek(&fnoFileToTransfer, 0);	//seek to the beginning of the file
@@ -497,6 +511,8 @@ int main()
 				totalBytesRead += numBytesRead;
 				iSprintfReturn = snprintf(cTransferFileContents, numBytesRead, cTransferFileContents + '\0');
 
+				sent = 0;
+				returnVal = 0;
 				while(1)
 				{
 					returnVal = XUartPs_Send(&Uart_PS, &(cTransferFileContents[0]) + sent, iSprintfReturn - sent);
@@ -527,7 +543,37 @@ int main()
 			}
 			break;
 		case 8: //List Data Files
-			ffs_res = f_open(&directoryLogFile, cDirectoryLogFile0, FA_READ);	//open the directory log file
+			//Just going to use the code from TX_filename
+			//TransferFiles(cDirectoryLogFile0,  &Uart_PS);
+
+			sent = 0;
+			returnVal = 0;
+			totalBytesRead = 0;
+			memset(cTransferFileContents, ' ', 101);	//reset the buffer
+
+			returnValue = f_open(&fnoFileToTransfer, cDirectoryLogFile0, FA_READ);
+			iFileSize = f_size(&fnoFileToTransfer);
+			returnValue = f_lseek(&fnoFileToTransfer, 0);	//seek to the beginning of the file
+			while(totalBytesRead < iFileSize)
+			{
+				returnValue = f_read(&fnoFileToTransfer, &(cTransferFileContents[0]), 100, &numBytesRead);	//read 100 bytes at a time until we are through with the file
+				totalBytesRead += numBytesRead;
+				iSprintfReturn = snprintf(cTransferFileContents, numBytesRead, cTransferFileContents + '\0');
+
+				sent = 0;
+				returnVal = 0;
+				while(1)
+				{
+					returnVal = XUartPs_Send(&Uart_PS, &(cTransferFileContents[0]) + sent, iSprintfReturn - sent);
+					sent += returnVal;			//we want to start farther into the buffer each round
+					if(sent == iSprintfReturn)	//if we have sent the same number of bytes as the size of the buffer, we are done
+						break;
+				}
+			}
+
+			returnValue = f_close(&fnoFileToTransfer);
+
+/*			ffs_res = f_open(&directoryLogFile, cDirectoryLogFile0, FA_READ);	//open the directory log file
 			dirSize = f_size(&directoryLogFile) - 10;							//we don't want the first 10 bits
 			filptr_cDIRFile = 10;												//set the read pointer after those bits
 			dirFileContents = (char *)malloc(1 * dirSize + 1);					//reserve space for the file to be read to	//this is one char for each byte in the file
@@ -544,7 +590,7 @@ int main()
 				if(sent == iSprintfReturn)	//if we have sent the same number of bytes as the size of the buffer, we are done
 					break;
 			}
-			free(dirFileContents);												//free the memory reserved by malloc
+			free(dirFileContents); */											//free the memory reserved by malloc
 			break;
 		case 9: //Set Trigger Threshold
 			iscanfReturn = sscanf(RecvBuffer + 3 + 1," %d", &iTriggerThreshold);	//read in value from the recvBuffer
@@ -567,10 +613,10 @@ int main()
 			}
 			break;
 		case 10: //Set Neutron Cuts
-			iscanfReturn = sscanf(RecvBuffer + 6 + 1, " %f_%f", &fNCut0, &fNCut1);
-			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "set n cuts %f %f ", fNCut0, fNCut1);
+			iscanfReturn = sscanf(RecvBuffer + 6 + 1, " %f_%f_%f_%f", &fNCut0, &fNCut1, &fNCut2, &fNCut3);
+			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "set n cuts %f %f %f %f ", fNCut0, fNCut1, fNCut2, fNCut3);
 			WriteToLogFile(cWriteToLogFile, iSprintfReturn);
-			iSprintfReturn = snprintf(cReportBuff, 100, "%f_%f", fNCut0, fNCut1);
+			iSprintfReturn = snprintf(cReportBuff, 100, "%f_%f_%f_%f", fNCut0, fNCut1, fNCut2, fNCut3);
 			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
 			break;
 		case 11: //Set High Voltage	//only works for 4 HV connections for now (should only be 4 per board)

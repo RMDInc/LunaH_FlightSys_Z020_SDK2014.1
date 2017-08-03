@@ -11,6 +11,8 @@
 #include <stdio.h>		//needed for unsigned types
 #include "xuartps.h"	//needed for uart functions
 
+int iPollBufferIndex;
+
 int ReadCommandType(char * RecvBuffer, XUartPs *Uart_PS);
 int PollUart(char * RecvBuffer, XUartPs *Uart_PS);
 

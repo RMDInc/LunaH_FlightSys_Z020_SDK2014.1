@@ -22,6 +22,8 @@ int thirdVal;
 int fourthVal;
 float ffirstVal;
 float fsecondVal;
+float fthirdVal;
+float ffourthVal;
 unsigned long long int realTime;
 char commandBuffer[10] = "";
 char commandBuffer2[50] = "";
@@ -37,6 +39,8 @@ int ReadCommandType(char * RecvBuffer, XUartPs *Uart_PS) {
 	fourthVal = 0;
 	ffirstVal = 0.0;
 	fsecondVal = 0.0;
+	fthirdVal = 0.0;
+	ffourthVal = 0.0;
 	realTime = 0;
 
 	XUartPs_SetOptions(Uart_PS,XUARTPS_OPTION_RESET_RX);	// Clear UART Read Buffer
@@ -145,7 +149,7 @@ int ReadCommandType(char * RecvBuffer, XUartPs *Uart_PS) {
 	}
 	else if(!strcmp(commandBuffer, "NGATES"))
 	{
-		ret = sscanf(RecvBuffer + strlen(commandBuffer) + 1, " %f_%f", &ffirstVal, &fsecondVal);	//check for the _number of the waveform
+		ret = sscanf(RecvBuffer + strlen(commandBuffer) + 1, " %f_%f_%f_%f", &ffirstVal, &fsecondVal, &fthirdVal, &ffourthVal);	//check for the _number of the waveform
 
 		if(ret != 2)	//invalid input
 		{
@@ -240,11 +244,10 @@ int ReadCommandType(char * RecvBuffer, XUartPs *Uart_PS) {
 int PollUart(char * RecvBuffer, XUartPs *Uart_PS)
 {
 	//Variable definitions
-	rbuff = 0;
 	int returnVal = 0;
 
-	rbuff += XUartPs_Recv(Uart_PS, RecvBuffer + rbuff, 32 - rbuff);
-	if(RecvBuffer[rbuff-1] == '\n' || RecvBuffer[rbuff-1] == '\r')	//if we find an 'enter'
+	iPollBufferIndex += XUartPs_Recv(Uart_PS, RecvBuffer + iPollBufferIndex, 32 - iPollBufferIndex);
+	if(RecvBuffer[iPollBufferIndex-1] == '\n' || RecvBuffer[iPollBufferIndex-1] == '\r')	//if we find an 'enter'
 		ret = sscanf(RecvBuffer, " %[^_]", commandBuffer);			//copy the command (everything before the underscore)
 	if(!strcmp(commandBuffer, "BREAK"))
 		returnVal = 14;
