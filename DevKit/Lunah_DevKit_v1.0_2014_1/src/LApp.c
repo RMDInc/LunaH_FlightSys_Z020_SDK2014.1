@@ -65,8 +65,8 @@ int main()
 	int iTmpSetTemp = 0;
 	int iTmpTimeout = 0;
 	//case 3
-	unsigned int uiTotalNeutronsPSD = 294967295;
-	unsigned int uiLocalTime = 1234567890;
+	unsigned int uiTotalNeutronsPSD = 0;
+	unsigned int uiLocalTime = 0;
 	int iAnalogTemp = 12;
 	int iDigitalTemp = 34;
 	//case 10
@@ -202,18 +202,23 @@ int main()
 	// ******************* POLLING LOOP *******************//
 	while(1){
 		XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);	// Clear UART Read Buffer
-		memset(RecvBuffer, '0', 32);							// Clear RecvBuffer Variable
-
+		memset(RecvBuffer, '\0', 32);							// Clear RecvBuffer Variable
+		iPollBufferIndex = 0;									// Reset the variable keeping track of entered characters in the receive buffer
 		while(1)
 		{
 			imenusel = 99999;
-			memset(RecvBuffer, '\0', 32);							// Clear RecvBuffer Variable
 			imenusel = ReadCommandType(RecvBuffer, &Uart_PS);
 
 			//now use the return value to figure out what to do with this information
-
 			if ( imenusel >= -1 && imenusel <= 17 )
 				break;
+
+			// This code replicates the per second data heartbeat
+			sleep(1);
+			iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d_%u_%u", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
+			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+			uiTotalNeutronsPSD += 25;
+			uiLocalTime += 1;
 		}
 
 		switch (imenusel) { // Switch-Case Menu Select
@@ -230,12 +235,20 @@ int main()
 			iSprintfReturn = snprintf(cReportBuff, 100, "%s_%s", cEVTFileName, cCNTFileName);			//create the string to tell CDH
 			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);						//report to CDH
 
+			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
 			//begin polling for either 'break', 'end', or 'START'
 			while(1)
 			{
 				ipollReturn = ReadCommandType(RecvBuffer, &Uart_PS);
 				if(ipollReturn == 14 || ipollReturn == 15)	//14=break, 15=start_orbitnumber
 					break;
+
+				// This code replicates the per second data heartbeat
+				sleep(1);
+				iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d_%u_%u", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
+				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				uiTotalNeutronsPSD += 25;
+				uiLocalTime += 1;
 			}
 			if(ipollReturn == 14)	//if the input was break, leave the loop, go back to menu
 			{
@@ -320,6 +333,7 @@ int main()
 			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);		//report to CDH
 
 			//begin polling for either 'break', 'end', or 'START'
+			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
 			memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
 			XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);	// Clear UART Read Buffer
 			while(1)
@@ -327,6 +341,13 @@ int main()
 				ipollReturn = ReadCommandType(RecvBuffer, &Uart_PS);
 				if(ipollReturn == 14 || ipollReturn == 15)	//14=break, 15=START_realtime
 					break;
+
+				// This code replicates the per second data heartbeat
+				sleep(1);
+				iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d_%u_%u", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
+				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				uiTotalNeutronsPSD += 25;
+				uiLocalTime += 1;
 			}
 			if(ipollReturn == 14)	//if the input was break, leave the loop, go back to menu
 			{

@@ -27,8 +27,8 @@ float ffourthVal;
 unsigned long long int realTime;
 char commandBuffer[10] = "";
 char commandBuffer2[50] = "";
-unsigned int ui_TotalNeutronsPSD = 294967295;
-unsigned int ui_LocalTime = 1234567890;
+//unsigned int ui_TotalNeutronsPSD = 294967295;
+//unsigned int ui_LocalTime = 1234567890;
 int i_AnalogTemp = 12;
 int i_DigitalTemp = 34;
 char c_ReportBuff[100] = "";
@@ -50,14 +50,18 @@ int ReadCommandType(char * RecvBuffer, XUartPs *Uart_PS) {
 	ffourthVal = 0.0;
 	realTime = 0;
 
-	XUartPs_SetOptions(Uart_PS,XUARTPS_OPTION_RESET_RX);	// Clear UART Read Buffer
-	while (!(RecvBuffer[rbuff-1] == '\n' || RecvBuffer[rbuff-1] == '\r'))
+/*	while (!(RecvBuffer[rbuff-1] == '\n' || RecvBuffer[rbuff-1] == '\r'))
 	{
 		if(rbuff>32) { rbuff = 0;}
 		rbuff += XUartPs_Recv(Uart_PS, RecvBuffer + rbuff, 32 - rbuff);
-	}
+	} */
 
-	ret = sscanf(RecvBuffer, " %[^_]", commandBuffer);	//copy the command (everything before the underscore)
+	iPollBufferIndex += XUartPs_Recv(Uart_PS, RecvBuffer + iPollBufferIndex, 32 - iPollBufferIndex);// Since iPollBufferIndex is global, we keep track of how many bytes we have read in to the receive buffer
+	if(RecvBuffer[iPollBufferIndex - 1] == '\n' || RecvBuffer[iPollBufferIndex - 1] == '\r')		// if we find a return character
+		ret = sscanf(RecvBuffer, " %[^_]", commandBuffer);											// copy the command (everything before the underscore)
+	else
+		return 99;	// If we don't find a return character, don't try and check the commandBuffer for one
+
 	if(!strcmp(commandBuffer, "DAQ"))
 	{
 		ret = sscanf(RecvBuffer + strlen(commandBuffer) + 1, " %d", &firstVal);	//check that there is one int after the underscore // may need a larger value here to take a 64-bit time
