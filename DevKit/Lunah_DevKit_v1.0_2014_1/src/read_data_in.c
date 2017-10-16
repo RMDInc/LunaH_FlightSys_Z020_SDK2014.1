@@ -7,30 +7,13 @@
 
 #include "read_data_in.h"
 
-int ReadDataIn(float fEnergySlope, float fEnergyIntercept, int numFilesWritten, FIL * directoryLogFileObject){
-
-	///// General Variables /////
-	//XUartPs Uart_PS;			// Instance of the UART Device
-	//XGpioPs Gpio;				// Instance of the GPIO Driver Interface
-
+int ReadDataIn(float fEnergySlope, float fEnergyIntercept)
+{
 	int sw = 0;						// switch to stop and return to main menu  0= default.  1 = return
-	//u8 RecvBuffer[32];			// Buffer for receiving data, made global GS
-
 	u32 data;
 	int dram_ceiling;
 	int dram_addr, array_index, diff;
 	double bl1, bl2, bl3, bl4, bl_avg;	// bl_sum;
-	long long howFar;
-
-	//FIL file;
-	//FATFS fatfs;
-	FILINFO finfo;
-	int iwrPtr = 0;
-	char wrPtrBuff[11] = {};		// Holds 10 numbers and a null terminator
-	char cDirectoryLogFile1[] = "DirectoryFile.txt";	//Directory File to hold all filenames
-	uint iBytesRead = 0;
-	uint iBytesWritten = 0;
-	int iSprintfRet = 0;
 
 	struct event_raw *data_array;
 	data_array = (struct event_raw *)malloc(sizeof(double)*512);
@@ -43,31 +26,48 @@ int ReadDataIn(float fEnergySlope, float fEnergyIntercept, int numFilesWritten, 
 	bl4 = 0.0;
 	bl_avg = 0.0;
 	diff = 0;
-	howFar = 0;
 
 	dram_addr = 0xa000000;		// Read only Adj Average data from DRAM
 	dram_ceiling = 0xA004000; 	//read out just adjacent average (0xA004000 - 0xa000000 = 16384)	//167788544
+//	dram_ceiling = 0xA00C000;	//
 
 	Xil_DCacheInvalidateRange(0x00000000, 65536);
 
-	while (dram_addr <= dram_ceiling) {
-
+	//identify and test loop //looking for a false event or 111111 with a valid event following it
+	while(1)
+	{
 		data = Xil_In32(dram_addr);
-		diff = (dram_ceiling - dram_addr) / 4;
 
-		if( data == 111111 && diff > 7 ) {
+		if(data == 111111)
+		{
+			//check for a second identifier
+			if(Xil_In32(dram_addr + 4) == 111111)
+				dram_addr += 4;
+
+		}
+	}
+
+	//sort and process loop
+	while (dram_addr <= dram_ceiling) //only read in if we are within the dram addresses that have data
+	{
+		//read in the data
+		data = Xil_In32(dram_addr);
+		diff = (dram_ceiling - dram_addr) / 4;	//looks for the end of the buffer so we may stop processing if we get too close
+
+		//sort the data into the struct from above //also process the data
+		if( data == 111111 && diff > 7 )
+		{
 			data_array[array_index].time = (double)Xil_In32(dram_addr + 4) * 262.144e-6;
-			// trying out using just struct of ints (not doubles)
 			data_array[array_index].total_events = (double)Xil_In32(dram_addr + 8);
 			data_array[array_index].event_num = (double)Xil_In32(dram_addr + 12);
 			data_array[array_index].bl = (double)Xil_In32(dram_addr + 16) / ( 16.0 * 38.0 );
-			//++nevents;
-			//bl_sum += data_array[array_index].bl;
-			bl4 = bl3;
-			bl3 = bl2;
-			bl2 = bl1;
+
+			bl4 = bl3; bl3 = bl2; bl2 = bl1;
 			bl1 = data_array[array_index].bl;
-			bl_avg = (bl1 + bl2 + bl3 + bl4) / 4;
+			if(bl4 == 0.0)
+				bl_avg = bl1;
+			else
+				bl_avg = (bl1 + bl2 + bl3 + bl4) / 4.0;
 
 			data_array[array_index].si = ((double)Xil_In32(dram_addr + 20) / 16.0) - bl_avg * 73.0;
 			data_array[array_index].li = ((double)Xil_In32(dram_addr + 24) / 16.0) - bl_avg * 169.0;
@@ -82,45 +82,25 @@ int ReadDataIn(float fEnergySlope, float fEnergyIntercept, int numFilesWritten, 
 		}
 	}	// end of while loop
 
+	//SD card stuff //uncomment when ready to test SD card
+	/*
 	static FIL file1;
 	char filenameBin[20] = {};
-
 	FRESULT res;				// Return variable for SD functions
 	uint numBytesWritten;
-	int fileSize = 8 * 9 * array_index;	// 8 bytes * 9 values * number of rows filled in array
+	int fileSize = 0;
 
 	Xil_DCacheFlush();
 	Xil_DCacheDisable();
 
-	iSprintfRet = snprintf(filenameBin, FILENAME_BUFF_SIZE, "test%08d.bin", 4141);
-
-	FILINFO finfo2;
-	res = f_stat(filenameBin, &finfo2);
-
-	if ( f_stat(filenameBin, &finfo) ){	// when 1 we add to the file, 0 does not trigger the if()	// before we get to the main save loop, interrogate to see if the file already exists
-		res = f_open(directoryLogFileObject, cDirectoryLogFile1, FA_READ|FA_WRITE);
-		res = f_lseek(directoryLogFileObject, 0);
-		res = f_read(directoryLogFileObject, wrPtrBuff, 10, &iBytesRead);
-		sscanf(wrPtrBuff, "%d", &iwrPtr);				//take the write pointer from char -> integer so we may use it
-		res = f_lseek(directoryLogFileObject, iwrPtr);	//move the write pointer so we don't overwrite info
-		res = f_write(directoryLogFileObject, filenameBin, iSprintfRet, &iBytesWritten);	//add the new file name
-		iwrPtr += iBytesWritten;						//update the write pointer
-		res = f_lseek(directoryLogFileObject, 0);		//seek to beginning again
-		snprintf(wrPtrBuff, 10, "%d", iwrPtr);			// Write that integer to a string for saving
-		res = f_lseek(directoryLogFileObject, (10 - LNumDigits(iwrPtr)));	// Seek to the beginning of the file skipping the leading zeroes
-		res = f_write(directoryLogFileObject, wrPtrBuff, LNumDigits(iwrPtr), &iBytesWritten); // Write the new file pointer
-		res = f_close(directoryLogFileObject);
-	}
-
+	//open, write to, and close the data file //writes one buffer at a time
 	res = f_open(&file1, filenameBin, FA_OPEN_ALWAYS | FA_WRITE);	// Open the file if it exists, if not create a new file; file has write permission
 	if(res)
 		sw = 1;
-	howFar = 36720 * numFilesWritten;					// Calculate where to put the file pointer for writing
-	res = f_lseek(&file1, howFar);						// Move the file write pointer to somewhere in the file
+	res = f_lseek(&file1, file1.fsize);						// Move the file write pointer to somewhere in the file
 	res = f_write(&file1, (const void*)data_array, fileSize, &numBytesWritten);	// Write the array data from above to the file, returns the #bytes written
 	res = f_close(&file1);		// Close the file on the SD card
-
-	//res = f_mount(0, NULL);	// Unmount the SD Card	// don't un-comment this line or the SD card will unmount and then be unable to re-mount correctly
+	*/
 
 	free(data_array);			// Return the space reserved for the array back to the OS
 	return sw;

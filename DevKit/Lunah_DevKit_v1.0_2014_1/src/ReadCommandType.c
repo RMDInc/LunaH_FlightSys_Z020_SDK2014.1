@@ -25,7 +25,7 @@ float fsecondVal;
 float fthirdVal;
 float ffourthVal;
 unsigned long long int realTime;
-char commandBuffer[10] = "";
+char commandBuffer[20] = "";
 char commandBuffer2[50] = "";
 //unsigned int ui_TotalNeutronsPSD = 294967295;
 //unsigned int ui_LocalTime = 1234567890;
@@ -244,6 +244,8 @@ int ReadCommandType(char * RecvBuffer, XUartPs *Uart_PS) {
 	}
 	else if(!strcmp(commandBuffer, "ENDTMP"))
 		commandNum = 17;
+	else if(!strcmp(commandBuffer, "TEST"))	//will remove for final version, this starts data printing to the screen
+		commandNum = -2;
 	else
 		commandNum = -1;
 

@@ -114,7 +114,7 @@ int ReadCommandPoll();				// Read Command Poll Function
 void SetIntegrationTimes();			// Set the Registers forIntegral Times
 int PrintData();					// Print Data to the Terminal Window
 void ClearBuffers();				// Clear Processed Data Buffers
-int DAQ(float fEnergySlope, float fEnergyIntercept);							// Clear Processed Data Buffers
+int DAQ();							// Clear Processed Data Buffers
 int getWFDAQ();						// Print data skipping saving it to SD card
 int LNumDigits(int number);			// Determine the number of digits in an int
 

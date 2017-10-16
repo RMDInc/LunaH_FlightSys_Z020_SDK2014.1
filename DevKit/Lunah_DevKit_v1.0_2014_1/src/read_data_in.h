@@ -44,6 +44,6 @@ struct event_raw {			// Structure is 8+4+8+8+8+8= 44 bytes long
 };
 
 ///// Function Definitions /////
-int ReadDataIn(float fEnergySlope, float fEnergyIntercept, int numFilesWritten, FIL * filObj);	// Print Data to the Terminal Window
+int ReadDataIn(float fEnergySlope, float fEnergyIntercept);	// Print Data to the Terminal Window
 
 #endif /* READ_DATA_IN_H_ */

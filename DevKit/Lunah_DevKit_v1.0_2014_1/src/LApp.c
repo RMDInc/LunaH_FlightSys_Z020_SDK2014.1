@@ -14,6 +14,7 @@
 int main()
 {
 	//Variable Definitions
+
 	int iterator = 0;
 	int	imenusel = 99999;	// Menu Select
 	int iscanfReturn = 0;
@@ -40,6 +41,8 @@ int main()
 	int sent = 0;
 	int returnVal = 0;
 	int bytesSent = 0;
+	int buffsize = 0; 	//BRAM buffer size
+	int counter = 0;
 
 	//transfer file variables
 	FIL fnoFileToTransfer;
@@ -103,13 +106,13 @@ int main()
 	/* Conduct a Self-test for the UART */
 	Status = XUartPs_SelfTest(&Uart_PS);
 	if (Status != 0) {
+		xil_printf("UART Self test failed.\r\nStatus = %d\r\n",Status);
 		//return 1; }			//handle error checks here better
 	//xil_printf("UART self-test failed\r\nStatus = %d",Status);
 	}
 
 	/* Check the format */
 	XUartPs_GetDataFormat(&Uart_PS, &Uart_Format);
-
 
 	/* Set to normal mode. */
 	XUartPs_SetOperMode(&Uart_PS, XUARTPS_OPER_MODE_NORMAL);
@@ -127,6 +130,12 @@ int main()
 	Xil_Out32 (XPAR_AXI_GPIO_8_BASEADDR, 25);*/
 	//*******************enable the system **********************//
 	Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 1);
+
+	//test these for problems	//putting this here worked to allow the system to readout the values from dram
+//	Xil_Out32(XPAR_AXI_GPIO_9_BASEADDR,1);	//Clear buffers, sleep 1 s
+//	sleep(1);
+//	Xil_Out32(XPAR_AXI_GPIO_9_BASEADDR,0);
+
 	//*******************Receive and Process Packets **********************//
 
 	// *********** Setup the Hardware Reset GPIO ****************//
@@ -199,6 +208,32 @@ int main()
 	}
 	// *********** Mount SD Card and Initialize Variables ****************//
 
+	// *********** Update Date and Time on Files ****************//
+/*	iSprintfReturn = snprintf(cReportBuff, 100, "Timestamp: %u/%02u/%02u, %02u:%02u\r\n", (fno.fdate >> 9) + 1980, fno.fdate >> 5 & 15, fno.fdate & 31, fno.ftime >> 11, fno.ftime >> 5 & 63);
+	bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+
+	int year = 2017;
+	int month = 8;
+	int mday = 8;
+	int hour = 12;
+	int min = 34;
+	int sec = 56;
+
+	fno.fdate = (WORD)(((year - 1980) * 512U) | month * 32U | mday);
+	fno.ftime = (WORD)(hour * 2048U | min * 32U | sec / 2U);
+
+	ffs_res = f_utime((char * )cLogFile, &fno);
+	if (ffs_res)
+	{
+		//complain
+	}
+	//xil_printf("Timestamp: %u/%02u/%02u, %02u:%02u\r\n", (fno.fdate >> 9) + 1980, fno.fdate >> 5 & 15, fno.fdate & 31, fno.ftime >> 11, fno.ftime >> 5 & 63);
+
+	iSprintfReturn = snprintf(cReportBuff, 100, "Timestamp: %u/%02u/%02u, %02u:%02u", (fno.fdate >> 9) + 1980, fno.fdate >> 5 & 15, fno.fdate & 31, fno.ftime >> 11, fno.ftime >> 5 & 63);
+	bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+*/
+	// *********** Update Date and Time on Files ****************//
+
 	// ******************* POLLING LOOP *******************//
 	while(1){
 		XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);	// Clear UART Read Buffer
@@ -210,7 +245,7 @@ int main()
 			imenusel = ReadCommandType(RecvBuffer, &Uart_PS);
 
 			//now use the return value to figure out what to do with this information
-			if ( imenusel >= -1 && imenusel <= 17 )
+			if ( imenusel >= -2 && imenusel <= 17 )
 				break;
 
 			// This code replicates the per second data heartbeat
@@ -222,6 +257,42 @@ int main()
 		}
 
 		switch (imenusel) { // Switch-Case Menu Select
+		case -2: //Test case statement for bringing DAQ back into the project
+			//change parameters, prepare system to run
+			Xil_Out32(XPAR_AXI_GPIO_14_BASEADDR, (u32)4);	//enable processed data, change mode
+			usleep(1);
+			Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, (u32)1);	//enables system
+			usleep(1);
+			iTriggerThreshold = 0;
+			Xil_Out32(XPAR_AXI_GPIO_10_BASEADDR, (u32)iTriggerThreshold);	//set trigger threshold
+			usleep(1);
+
+			XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);
+			iPollBufferIndex = 0;
+			memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
+			while(1)
+			{
+				//check for user input
+				ipollReturn = ReadCommandType(RecvBuffer, &Uart_PS);
+				if(ipollReturn == 14)
+					break;
+
+				//check the FPGA buffers
+				buffsize = Xil_In32(XPAR_AXI_GPIO_11_BASEADDR);	//how full are the buffers?
+				if(buffsize >= 4095)
+				{
+					DAQ();
+					PrintData();
+//					ReadDataIn(1.0, 0.0);
+					printf("\r\n%d\r\n",counter++);
+				}
+				else
+					printf("\r\nWaiting for buffer to fill...\r\n");
+
+				//check if it's time to write SOH information
+				//...
+			}
+			break;
 		case -1:
 			iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF");
 			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
@@ -775,71 +846,36 @@ int ReadCommandPoll() {
 
 //////////////////////////// PrintData ////////////////////////////////
 int PrintData( ){
-	u32 data;
+	unsigned int data;
 	int dram_addr;
-
-	// Read only Adj Average data from DRAM
 	int dram_base = 0xa000000;
-	int dram_cieling = 0xA004000; //read out just adjacent average (0xA004000 - 0xa000000 = 16384)
+	int dram_ceiling = 0xA004000; //read out just adjacent average (0xA004000 - 0xa000000 = 16384)
+//	int dram_ceiling = 0xA00C000; //read out all three buffers     (0xA00C000 - 0xa000000 = 65536)	//can't do this with the bitstream as of 10/10/17
 
-	Xil_DCacheInvalidateRange(0x00000000, 65536);
+	Xil_DCacheInvalidateRange(0xa0000000, 65536);
 
-	for (dram_addr = dram_base; dram_addr <= dram_cieling; dram_addr+=4){
-		if (!sw) { sw = XGpioPs_ReadPin(&Gpio, SW_BREAK_GPIO); } //read pin
+	for (dram_addr = dram_base; dram_addr <= dram_ceiling; dram_addr+=4)	//just for testing, leave printf in
+	{
 		data = Xil_In32(dram_addr);
 		xil_printf("%d\r\n",data);
-		// check the uart buffer for a 'q'
-		XUartPs_Recv(&Uart_PS, &RecvBuffer, 32);
-		if ( RecvBuffer[0] == 'q' ) { sw = 1;  }
-		if(sw) { return sw; }
 	}
 
 	return sw;
 }
 //////////////////////////// PrintData ////////////////////////////////
 
-
-//////////////////////////// Clear Processed Data Buffers ////////////////////////////////
-void ClearBuffers() {
-	Xil_Out32(XPAR_AXI_GPIO_9_BASEADDR,1);
-	sleep(1);						// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 1 s
-	Xil_Out32(XPAR_AXI_GPIO_9_BASEADDR,0);
-}
-//////////////////////////// Clear Processed Data Buffers ////////////////////////////////
-
 //////////////////////////// DAQ ////////////////////////////////
-int DAQ(float fEnergySlope, float fEnergyIntercept){
-	int pollReturn = 0;
-	int buffsize = 0; 	//BRAM buffer size
-	//int dram_addr = 0;	// DRAM Address
-	static int filesWritten = 0;
+int DAQ(){
+	Xil_Out32 (XPAR_AXI_GPIO_15_BASEADDR, 1);
+	Xil_Out32 (XPAR_AXI_DMA_0_BASEADDR + 0x48, 0xa000000);
+	Xil_Out32 (XPAR_AXI_DMA_0_BASEADDR + 0x58 , 65536);
+	usleep(54);
 
-	XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);
+	Xil_Out32 (XPAR_AXI_GPIO_15_BASEADDR, 0);
 
-	Xil_Out32 (XPAR_AXI_DMA_0_BASEADDR + 0x48, 0xa000000); 		// DMA Transfer Step 1
-	Xil_Out32 (XPAR_AXI_DMA_0_BASEADDR + 0x58 , 65536);			// DMA Transfer Step 2
-	sleep(1);						// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 1 s
-	ClearBuffers();												// Clear Buffers.
-	// Capture garbage in DRAM
-	//for (dram_addr = 0xa000000; dram_addr <= 0xA004000; dram_addr+=4){Xil_In32(dram_addr);}
-
-	while(1){
-		pollReturn = ReadCommandType(RecvBuffer, &Uart_PS);	//check each time through for a 'break'
-		if(pollReturn==14){return 1;}						//received 'break'
-
-		buffsize = Xil_In32 (XPAR_AXI_GPIO_11_BASEADDR);	//how full are the buffers?
-		if(buffsize >= 4095){
-			Xil_Out32 (XPAR_AXI_GPIO_15_BASEADDR, 1);
-			Xil_Out32 (XPAR_AXI_DMA_0_BASEADDR + 0x48, 0xa000000);
-			Xil_Out32 (XPAR_AXI_DMA_0_BASEADDR + 0x58 , 65536);
-			sleep(1); 			// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 1 s
-			Xil_Out32 (XPAR_AXI_GPIO_15_BASEADDR, 0);
-			Xil_Out32(XPAR_AXI_GPIO_9_BASEADDR,1);
-			Xil_Out32(XPAR_AXI_GPIO_9_BASEADDR,0);
-			sw = ReadDataIn(fEnergySlope, fEnergyIntercept, filesWritten, &directoryLogFile);
-			++filesWritten;
-		}
-	}
+	Xil_Out32(XPAR_AXI_GPIO_9_BASEADDR,1);	//Clear buffers, sleep 1 us
+	usleep(10);
+	Xil_Out32(XPAR_AXI_GPIO_9_BASEADDR,0);
 
 	return sw;
 }
