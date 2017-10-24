@@ -27,8 +27,9 @@ int main()
 	char cWFDFileName[FILENAME_SIZE] = "";
 	char cFileToAccess[FILENAME_SIZE] = "";
 	char cReportBuff[100] = "";
-	unsigned char errorBuff[] = "ERROR";
+	unsigned char errorBuff[] = "FFFFFF";
 	long long int iRealTime = 0;
+	unsigned int uiEndTime = 0;
 	char cWriteBREAK[] = "BREAK requested ";
 	char cBREAK[] = "FAFAFA";
 	int iTriggerThreshold = 0;
@@ -56,6 +57,7 @@ int main()
 	//test write zeroes
 	FIL zeroFile;
 	FRESULT returnValue = 0;
+
 	int filptr_cZeroFile = 0;
 	unsigned int numBytesWritten = 0;	//try unsigned int instead of uint
 	char cZeroFile[] = "ZeroFile.txt";	//Create a log file and file pointer
@@ -64,6 +66,9 @@ int main()
 //	double * data_array;
 //	data_array = (double *)malloc(sizeof(double)*1);
 
+	//header
+	unsigned int uiHeaderInfo = 0;
+	unsigned int ucFileType = "";
 	//case 2
 	int iTmpSetTemp = 0;
 	int iTmpTimeout = 0;
@@ -118,25 +123,14 @@ int main()
 	XUartPs_SetOperMode(&Uart_PS, XUARTPS_OPER_MODE_NORMAL);
 	//*******************Setup the UART **********************//
 
-	//*******************Receive and Process Packets **********************//
-	Xil_Out32 (XPAR_AXI_GPIO_0_BASEADDR, 11);	// setting defaults for integration times	//bl
+	//******************* Set Defaults **********************//
+	Xil_Out32 (XPAR_AXI_GPIO_0_BASEADDR, 11);	// baseline
 	Xil_Out32 (XPAR_AXI_GPIO_1_BASEADDR, 71);	// short
 	Xil_Out32 (XPAR_AXI_GPIO_2_BASEADDR, 167);	// long
 	Xil_Out32 (XPAR_AXI_GPIO_3_BASEADDR, 2015);	// full
-/*	Xil_Out32 (XPAR_AXI_GPIO_4_BASEADDR, 12);
-	Xil_Out32 (XPAR_AXI_GPIO_5_BASEADDR, 75);
-	Xil_Out32 (XPAR_AXI_GPIO_6_BASEADDR, 75);
-	Xil_Out32 (XPAR_AXI_GPIO_7_BASEADDR, 5);
-	Xil_Out32 (XPAR_AXI_GPIO_8_BASEADDR, 25);*/
-	//*******************enable the system **********************//
-	Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 1);
+	Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 1);	//enable the system
 
-	//test these for problems	//putting this here worked to allow the system to readout the values from dram
-//	Xil_Out32(XPAR_AXI_GPIO_9_BASEADDR,1);	//Clear buffers, sleep 1 s
-//	sleep(1);
-//	Xil_Out32(XPAR_AXI_GPIO_9_BASEADDR,0);
-
-	//*******************Receive and Process Packets **********************//
+	//******************* Set Defaults **********************//
 
 	// *********** Setup the Hardware Reset GPIO ****************//
 	GPIOConfigPtr = XGpioPs_LookupConfig(XPAR_PS7_GPIO_0_DEVICE_ID);
@@ -153,86 +147,40 @@ int main()
 		doMount = 1;
 	}
 
-	fresult = f_stat( cLogFile, &fno);
+	fresult = f_stat( cLogFile, &fno);	// check if the command log file exists
 	switch(fresult)
 	{
 	case FR_OK:	// If the file exists, read it
 		ffs_res = f_open(&logFile, cLogFile, FA_READ|FA_WRITE);	//open with read/write access
-		ffs_res = f_lseek(&logFile, 0);							//go to beginning of file
-		ffs_res = f_read(&logFile, &filptr_buffer, 10, &numBytesRead);	//Read the first 10 bytes to determine flags and the size of the write pointer
-		sscanf(filptr_buffer, "%d", &filptr_clogFile);			//take the write pointer from char -> integer so we may use it
-		ffs_res = f_lseek(&logFile, filptr_clogFile);			//move the write pointer so we don't overwrite info
+		ffs_res = f_lseek(&logFile, f_size(&logFile));							//move to the end of file
 		iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "POWER RESET %f ", dTime);	//write that the system was power cycled
 		ffs_res = f_write(&logFile, cWriteToLogFile, iSprintfReturn, &numBytesWritten);	//write to the file
-		filptr_clogFile += numBytesWritten;						//update the write pointer
 		ffs_res = f_close(&logFile);
 		break;
 	case FR_NO_FILE: //	if no file exists, so open/create the file
-		ffs_res = f_open(&logFile, cLogFile, FA_WRITE|FA_OPEN_ALWAYS);			//open a new file
-		ffs_res = f_write(&logFile, cZeroBuffer, 10, &numBytesWritten);			//write a buffer of 10 0's to it
-		filptr_clogFile += numBytesWritten;										// Protect the first xx number of bytes to use as flags, in this case xx is 10
-		snprintf(cWriteToLogFile, 10, "%d", filptr_clogFile);					// Write that to a string for saving
-		ffs_res = f_lseek(&logFile, (10 - LNumDigits(filptr_clogFile)));		// Seek to the beginning of the file skipping the leading zeroes
-		ffs_res = f_write(&logFile, cWriteToLogFile, LNumDigits(filptr_clogFile), &numBytesWritten); // Write the new file pointer
-		ffs_res = f_close(&logFile);
+		ffs_res = f_open(&logFile, cLogFile, FA_WRITE|FA_OPEN_ALWAYS);	//open a new file; this creates the log file
+		iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "SYSTEM ON %f", dTime);	//write the time the system is first booted
+		ffs_res = f_close(&logFile);									//close the file
 		break;
 	default:
 		bytesSent = XUartPs_Send(&Uart_PS, errorBuff,20);	//send a string
 	}
 
-	fresult = f_stat(cDirectoryLogFile0, &fnoDIR);
+	fresult = f_stat(cDirectoryLogFile0, &fnoDIR);	//check if the directory file exists
 	switch(fresult)
 	{
-	case FR_OK:
-		ffs_res = f_open(&directoryLogFile, cDirectoryLogFile0, FA_READ);					//open the file
-		ffs_res = f_lseek(&directoryLogFile, 0);											//move to the beginning of the file
-		ffs_res = f_read(&directoryLogFile, &filptr_cDIRFile_buffer, 10, &numBytesWritten);	//read the write pointer
-		sscanf(filptr_cDIRFile_buffer, "%d", &filptr_cDIRFile);								//write the pointer to the relevant variable
-		ffs_res = f_close(&directoryLogFile);
+	case FR_OK:	//it exists, move on
 		break;
-	case FR_NO_FILE:
-		ffs_res = f_open(&directoryLogFile, cDirectoryLogFile0, FA_WRITE|FA_OPEN_ALWAYS);	//if no, create the file
-		ffs_res = f_write(&directoryLogFile, cZeroBuffer, 10, &numBytesWritten);			//write the zero buffer so we can keep track of the write pointer
-		filptr_cDIRFile += 10;																//move the write pointer
+	case FR_NO_FILE:	//it doesn't exist, create the file and write the command log file name and it's own file name
+		ffs_res = f_open(&directoryLogFile, cDirectoryLogFile0, FA_WRITE|FA_OPEN_ALWAYS);	//create the file
 		ffs_res = f_write(&directoryLogFile, cLogFile, 11, &numBytesWritten);				//write the name of the log file because it was created above
-		filptr_cDIRFile += numBytesWritten;													//update the write pointer
-		ffs_res = f_write(&directoryLogFile, cDirectoryLogFile0, 17, &numBytesWritten);		//write the name of the Directory log file also
-		filptr_cDIRFile += numBytesWritten;													//update the write pointer
-		snprintf(cWriteToLogFile, 10, "%d", filptr_cDIRFile);								//write formatted output to a sized buffer; create a string of a certain length
-		ffs_res = f_lseek(&directoryLogFile, (10 - LNumDigits(filptr_cDIRFile)));			// Move to the start of the file
-		ffs_res = f_write(&directoryLogFile, cWriteToLogFile, LNumDigits(filptr_cDIRFile), &numBytesWritten);	//Record the new file pointer
-		ffs_res = f_close(&directoryLogFile);
+		ffs_res = f_write(&directoryLogFile, cDirectoryLogFile0, 17, &numBytesWritten);		//write the name of the Directory log file
+		ffs_res = f_close(&directoryLogFile);												//close the file
 		break;
 	default:
 		bytesSent = XUartPs_Send(&Uart_PS, errorBuff, 20);
 	}
 	// *********** Mount SD Card and Initialize Variables ****************//
-
-	// *********** Update Date and Time on Files ****************//
-/*	iSprintfReturn = snprintf(cReportBuff, 100, "Timestamp: %u/%02u/%02u, %02u:%02u\r\n", (fno.fdate >> 9) + 1980, fno.fdate >> 5 & 15, fno.fdate & 31, fno.ftime >> 11, fno.ftime >> 5 & 63);
-	bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
-
-	int year = 2017;
-	int month = 8;
-	int mday = 8;
-	int hour = 12;
-	int min = 34;
-	int sec = 56;
-
-	fno.fdate = (WORD)(((year - 1980) * 512U) | month * 32U | mday);
-	fno.ftime = (WORD)(hour * 2048U | min * 32U | sec / 2U);
-
-	ffs_res = f_utime((char * )cLogFile, &fno);
-	if (ffs_res)
-	{
-		//complain
-	}
-	//xil_printf("Timestamp: %u/%02u/%02u, %02u:%02u\r\n", (fno.fdate >> 9) + 1980, fno.fdate >> 5 & 15, fno.fdate & 31, fno.ftime >> 11, fno.ftime >> 5 & 63);
-
-	iSprintfReturn = snprintf(cReportBuff, 100, "Timestamp: %u/%02u/%02u, %02u:%02u", (fno.fdate >> 9) + 1980, fno.fdate >> 5 & 15, fno.fdate & 31, fno.ftime >> 11, fno.ftime >> 5 & 63);
-	bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
-*/
-	// *********** Update Date and Time on Files ****************//
 
 	// ******************* POLLING LOOP *******************//
 	while(1){
@@ -283,7 +231,6 @@ int main()
 				{
 					DAQ();
 					PrintData();
-//					ReadDataIn(1.0, 0.0);
 					printf("\r\n%d\r\n",counter++);
 				}
 				else
@@ -303,18 +250,17 @@ int main()
 			//create files and pass in filename to readDataIn function
 			snprintf(cEVTFileName, 50, "%04d_%04d_evt.bin",iorbitNumber, idaqRunNumber);	//assemble the filename for this DAQ run
 			snprintf(cCNTFileName, 50, "%04d_%04d_cnt.bin",iorbitNumber, idaqRunNumber);	//assemble the filename for this DAQ run
-			iSprintfReturn = snprintf(cReportBuff, 100, "%s_%s", cEVTFileName, cCNTFileName);			//create the string to tell CDH
-			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);						//report to CDH
+			iSprintfReturn = snprintf(cReportBuff, 100, "%s_%s", cEVTFileName, cCNTFileName);	//create the string to tell CDH
+			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);				//echo the name to bus?
 
 			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
-			//begin polling for either 'break', 'end', or 'START'
 			while(1)
 			{
-				ipollReturn = ReadCommandType(RecvBuffer, &Uart_PS);
+				ipollReturn = ReadCommandType(RecvBuffer, &Uart_PS);	//begin polling for either 'break', 'end', or 'START'
 				if(ipollReturn == 14 || ipollReturn == 15)	//14=break, 15=start_orbitnumber
 					break;
 
-				// This code replicates the per second data heartbeat
+				// This code replicates the per second data heart beat
 				sleep(1);
 				iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d_%u_%u", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
 				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
@@ -328,20 +274,40 @@ int main()
 				break;
 			}
 
-			//'START' begins data collection via DAQ(), saves the file names, command input
+			//'START'(15) begins data collection via DAQ(), saves the file names, command input
 			idaqRunNumber++;
 			iscanfReturn = sscanf(RecvBuffer + 5 + 1, " %llu", &iRealTime);
 
 			//enable hardware
 			Xil_Out32(XPAR_AXI_GPIO_14_BASEADDR, 4);	//enable processed data
-			Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 1);	//enables system???
-			//write to log file that we are starting a DAQ run
-			//dTime += 1;
-			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "DAQ Run %s %s %llu ", cEVTFileName,cCNTFileName, iRealTime);
+			Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 1);	//enables system
+
+			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "DAQ Run %s %s %llu ", cEVTFileName,cCNTFileName, iRealTime);	//write to log file that we are starting a DAQ run
 			WriteToLogFile(cWriteToLogFile, iSprintfReturn);
 
+			//create the header by bit shifting, math
+			uiHeaderInfo = iorbitNumber;		//and onto the header the orbit number
+			uiHeaderInfo = uiHeaderInfo << 16;	//shift it over
+			uiHeaderInfo += idaqRunNumber;		//and on the run number
+
+			//open the files for the run and write the headers
+			returnValue = f_open(&zeroFile, cCNTFileName, FA_OPEN_ALWAYS | FA_WRITE);
+			returnValue = f_lseek(&zeroFile, f_size(&zeroFile));
+			returnValue = f_write(&zeroFile, &iRealTime, 8, &numBytesWritten);	//real time is 64 bits = 8 bytes
+			returnValue = f_write(&zeroFile, &uiHeaderInfo, 4, &numBytesWritten);	//header info is 24 bit empty + 16 bit orbit num + 16 bit run num + 8 bit data type
+			ucFileType = 0;
+			returnValue = f_write(&zeroFile, &ucFileType, 1, &numBytesWritten);
+			returnValue = f_close(&zeroFile);
+
+			returnValue = f_open(&zeroFile, cEVTFileName, FA_OPEN_ALWAYS | FA_WRITE);
+			returnValue = f_lseek(&zeroFile, f_size(&zeroFile));
+			returnValue = f_write(&zeroFile, &iRealTime, 8, &numBytesWritten);
+			returnValue = f_write(&zeroFile, &uiHeaderInfo, 4, &numBytesWritten);
+			ucFileType = 2;
+			returnValue = f_write(&zeroFile, &ucFileType, 1, &numBytesWritten);
+			returnValue = f_close(&zeroFile);
+
 			//Begin collecting data
-			//DAQ(fEnergySlope, fEnergyIntercept);
 			uiTotalNeutronsPSD = 0;
 			uiLocalTime = 0;
 			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
@@ -358,15 +324,13 @@ int main()
 
 				//write zeroes to a file
 				returnValue = f_open(&zeroFile, cCNTFileName, FA_OPEN_ALWAYS | FA_WRITE);
-				returnVal = f_size(&zeroFile);
-				returnValue = f_lseek(&zeroFile, returnVal);
+				returnValue = f_lseek(&zeroFile, f_size(&zeroFile));
 				returnValue = f_write(&zeroFile, dZeroData, sizeof(dZeroData), &numBytesWritten);
 				returnValue = f_close(&zeroFile);
 
 				//write zeroes to the other file
 				returnValue = f_open(&zeroFile, cEVTFileName, FA_OPEN_ALWAYS | FA_WRITE);
-				returnVal = f_size(&zeroFile);
-				returnValue = f_lseek(&zeroFile, returnVal);
+				returnValue = f_lseek(&zeroFile, f_size(&zeroFile));
 				returnValue = f_write(&zeroFile, dZeroData, sizeof(dZeroData), &numBytesWritten);
 				returnValue = f_close(&zeroFile);
 
@@ -374,11 +338,24 @@ int main()
 			}
 			if(ipollReturn == 16)	//if the input was END, leave the loop, go back to menu
 			{
-				//write the realtime to the file as a footer
+				uiEndTime = iRealTime + uiLocalTime;
 
-				//Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//disable system
-				iSprintfReturn = snprintf(cReportBuff, 100, "%u", uiTotalNeutronsPSD);
+				returnValue = f_open(&zeroFile, cCNTFileName, FA_OPEN_ALWAYS | FA_WRITE);	//write the final realtime to the file as a footer
+				returnValue = f_lseek(&zeroFile, f_size(&zeroFile));
+				returnValue = f_write(&zeroFile, &uiEndTime, sizeof(uiEndTime), &numBytesWritten);
+				returnValue = f_close(&zeroFile);
+
+				returnValue = f_open(&zeroFile, cEVTFileName, FA_OPEN_ALWAYS | FA_WRITE);	//write the final realtime to the file as a footer
+				returnValue = f_lseek(&zeroFile, f_size(&zeroFile));
+				returnValue = f_write(&zeroFile, &uiEndTime, sizeof(uiEndTime), &numBytesWritten);
+				returnValue = f_close(&zeroFile);
+
+				iSprintfReturn = snprintf(cReportBuff, 100, "%u", uiTotalNeutronsPSD);	//return value for END_
 				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+
+				//write to the log file that we received END_ and the number of neutrons
+				iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "END DAQ Run %u %llu ", uiTotalNeutronsPSD, iRealTime);	//write to log file that we are starting a DAQ run
+				WriteToLogFile(cWriteToLogFile, iSprintfReturn);
 			}
 			else	//break was issued
 			{
@@ -390,7 +367,6 @@ int main()
 			sw = 0;	//reset stop switch
 			break;
 		case 1:	//Capture WF Data
-			//xil_printf("WF capture initiated\n\r");
 			iscanfReturn = sscanf(RecvBuffer + 2 + 1, " %d", &iorbitNumber);
 
 			//turn on hardware
@@ -398,7 +374,6 @@ int main()
 
 			//create files and pass in filename to readDataIn function
 			snprintf(cWFDFileName, 50, "%04d_%04d_wfd.bin",iorbitNumber, iwfRunNumber);	//assemble the filename for this DAQ run
-			//snprintf(cCNTFileName, 50, "%04d_%04d_cnt.bin",iorbitNumber, iwfRunNumber);
 
 			iSprintfReturn = snprintf(cReportBuff, 100, "%s", cWFDFileName);		//create the string to tell CDH
 			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);		//report to CDH
@@ -433,7 +408,7 @@ int main()
 
 			//enable hardware
 			Xil_Out32(XPAR_AXI_GPIO_14_BASEADDR, 0);	//enable processed data
-			Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 1);	//enables system???
+			Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 1);	//enables system
 
 			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "WF run %s %llu ", cWFDFileName, iRealTime);
 			WriteToLogFile(cWriteToLogFile, iSprintfReturn);
@@ -458,8 +433,7 @@ int main()
 
 				//write zeroes to a file code
 				returnValue = f_open(&zeroFile, cWFDFileName, FA_OPEN_ALWAYS | FA_WRITE);
-				returnVal = f_size(&zeroFile);
-				returnValue = f_lseek(&zeroFile, returnVal);
+				returnValue = f_lseek(&zeroFile, f_size(&zeroFile));
 				returnValue = f_write(&zeroFile, dZeroData, sizeof(dZeroData), &numBytesWritten);
 				returnValue = f_close(&zeroFile);
 
@@ -593,7 +567,6 @@ int main()
 			if(!f_stat(cFileToAccess, &fnoDIR2))	//returns 0 (false) if the file exists // !0 = true
 			{
 				ffs_res = f_unlink(cFileToAccess);
-				//xil_printf("\r\n%d_AAAA\r\n",ffs_res);
 				iSprintfReturn = snprintf(cReportBuff, 100, "%d_AAAA", ffs_res);
 				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
 			}

@@ -19,7 +19,7 @@ int WriteToLogFile(char * cWriteToLogFileBuff, int iNumBytesToWrite)
 	/* Open the Log File */
 	returnVal = f_open(&logFile, cLogFile, FA_OPEN_ALWAYS | FA_WRITE);
 	if(returnVal)
-		success = 0;	//xil_printf("Could not open file %d", returnVal);
+		success = 0;
 
 	/* Seek to the correct place in the file */
 	returnVal = f_lseek(&logFile, filptr_clogFile);
