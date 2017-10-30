@@ -33,8 +33,8 @@
 
 struct event_raw {			// Structure is 8+4+8+8+8+8= 44 bytes long
 	double time;
-	double total_events;
-	double event_num;
+	long long total_events;
+	long long event_num;
 	double bl;
 	double si;
 	double li;
@@ -43,7 +43,20 @@ struct event_raw {			// Structure is 8+4+8+8+8+8= 44 bytes long
 	double energy;
 };
 
+struct event_by_event {
+	u16 u_EplusPSD;
+	unsigned int ui_localTime;
+	unsigned int ui_nEvents_temp_ID;
+};
+
+struct counts_per_second {
+	unsigned int ui_nPSD_CNTsOverThreshold;
+	unsigned int ui_nNoPSD_nWideCuts;
+	unsigned int ui_localTime;
+	u8 uTemp;
+};
+
 ///// Function Definitions /////
-int ReadDataIn(float fEnergySlope, float fEnergyIntercept);	// Print Data to the Terminal Window
+int ReadDataIn(char * cCountFileName, char * cEventFileName, float fEnergySlope, float fEnergyIntercept);	// Print Data to the Terminal Window
 
 #endif /* READ_DATA_IN_H_ */

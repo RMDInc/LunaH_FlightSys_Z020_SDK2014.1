@@ -18,7 +18,6 @@ int main()
 	int iterator = 0;
 	int	imenusel = 99999;	// Menu Select
 	int iscanfReturn = 0;
-	int iTransferReturn = 0;
 	int iwfRunNumber = 0;
 	int idaqRunNumber = 0;
 	int iorbitNumber = 0;
@@ -47,28 +46,22 @@ int main()
 
 	//transfer file variables
 	FIL fnoFileToTransfer;
-	FILINFO fnoFileInfo;
 	int iFileSize = 0;
 	int iSprintfReturn = 0;
 	uint numBytesRead = 0;
 	int totalBytesRead = 0;
-	unsigned char cTransferFileContents[101] = "";
+	char cTransferFileContents[101] = "";
 
 	//test write zeroes
 	FIL zeroFile;
 	FRESULT returnValue = 0;
 
-	int filptr_cZeroFile = 0;
 	unsigned int numBytesWritten = 0;	//try unsigned int instead of uint
-	char cZeroFile[] = "ZeroFile.txt";	//Create a log file and file pointer
-	char cZeroData[] = "10101010";
-	double dZeroData[] = {12345.54321,12345.54321,12345.54321,12345.54321,12345.54321,12345.54321,12345.54321,12345.54321};
-//	double * data_array;
-//	data_array = (double *)malloc(sizeof(double)*1);
+	unsigned int uiZeroData[] = {111111, 12345, 678, 12, 34, 56, 78, 90};
 
 	//header
 	unsigned int uiHeaderInfo = 0;
-	unsigned int ucFileType = "";
+	unsigned int ucFileType = 0;
 	//case 2
 	int iTmpSetTemp = 0;
 	int iTmpTimeout = 0;
@@ -279,8 +272,10 @@ int main()
 			iscanfReturn = sscanf(RecvBuffer + 5 + 1, " %llu", &iRealTime);
 
 			//enable hardware
-			Xil_Out32(XPAR_AXI_GPIO_14_BASEADDR, 4);	//enable processed data
-			Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 1);	//enables system
+			Xil_Out32(XPAR_AXI_GPIO_14_BASEADDR, (u32)4);	//enable processed data
+			usleep(1);
+			Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, (u32)1);	//enables system
+			usleep(1);
 
 			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "DAQ Run %s %s %llu ", cEVTFileName,cCNTFileName, iRealTime);	//write to log file that we are starting a DAQ run
 			WriteToLogFile(cWriteToLogFile, iSprintfReturn);
@@ -317,22 +312,36 @@ int main()
 				ipollReturn = PollUart(RecvBuffer, &Uart_PS);
 				if(ipollReturn == 14 || ipollReturn == 16)	//14=break, 16=END_realtime
 					break;
+				if(ipollReturn == 18)	//tell the user that the input was bad and the buffer was reset
+				{
+					memset(RecvBuffer, '0', 32);
+					iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF");
+					bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				}
+
 				iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d_%u_%u", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
 				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
 				uiTotalNeutronsPSD += 25;
 				uiLocalTime += 1;
 
-				//write zeroes to a file
-				returnValue = f_open(&zeroFile, cCNTFileName, FA_OPEN_ALWAYS | FA_WRITE);
-				returnValue = f_lseek(&zeroFile, f_size(&zeroFile));
-				returnValue = f_write(&zeroFile, dZeroData, sizeof(dZeroData), &numBytesWritten);
-				returnValue = f_close(&zeroFile);
-
-				//write zeroes to the other file
-				returnValue = f_open(&zeroFile, cEVTFileName, FA_OPEN_ALWAYS | FA_WRITE);
-				returnValue = f_lseek(&zeroFile, f_size(&zeroFile));
-				returnValue = f_write(&zeroFile, dZeroData, sizeof(dZeroData), &numBytesWritten);
-				returnValue = f_close(&zeroFile);
+//				//write zeroes to a file
+//				returnValue = f_open(&zeroFile, cCNTFileName, FA_OPEN_ALWAYS | FA_WRITE);
+//				returnValue = f_lseek(&zeroFile, f_size(&zeroFile));
+//				returnValue = f_write(&zeroFile, uiZeroData, sizeof(uiZeroData), &numBytesWritten);
+//				returnValue = f_close(&zeroFile);
+//
+//				//write zeroes to the other file
+//				returnValue = f_open(&zeroFile, cEVTFileName, FA_OPEN_ALWAYS | FA_WRITE);
+//				returnValue = f_lseek(&zeroFile, f_size(&zeroFile));
+//				returnValue = f_write(&zeroFile, uiZeroData, sizeof(uiZeroData), &numBytesWritten);
+//				returnValue = f_close(&zeroFile);
+				//will replace the above with DAQ and ReadDataIn
+				if(Xil_In32(XPAR_AXI_GPIO_11_BASEADDR) > 4095)	//the value 4095 will change when we update to Meg's new bitstream
+				{
+					DAQ();
+					//PrintData();
+					ReadDataIn(cCNTFileName, cEVTFileName,1.0, 0.0);	//give the count filename, event filename, slope, y-intercept
+				}
 
 				sleep(2);
 			}
@@ -425,6 +434,13 @@ int main()
 				ipollReturn = PollUart(RecvBuffer, &Uart_PS);
 				if(ipollReturn == 14 || ipollReturn == 16)	//14=break, 16=END_realtime
 					break;
+				if(ipollReturn == 18)	//if the input was checked and reset, inform the user that it is bad
+				{
+					memset(RecvBuffer, '0', 32);
+					iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF");
+					bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				}
+
 				//xil_printf("\r\n%d_%d_%x_%x\r\n", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
 				iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d_%u_%u", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);			//create the string to tell CDH
 				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
@@ -434,7 +450,7 @@ int main()
 				//write zeroes to a file code
 				returnValue = f_open(&zeroFile, cWFDFileName, FA_OPEN_ALWAYS | FA_WRITE);
 				returnValue = f_lseek(&zeroFile, f_size(&zeroFile));
-				returnValue = f_write(&zeroFile, dZeroData, sizeof(dZeroData), &numBytesWritten);
+				returnValue = f_write(&zeroFile, uiZeroData, sizeof(uiZeroData), &numBytesWritten);
 				returnValue = f_close(&zeroFile);
 
 				sleep(2);

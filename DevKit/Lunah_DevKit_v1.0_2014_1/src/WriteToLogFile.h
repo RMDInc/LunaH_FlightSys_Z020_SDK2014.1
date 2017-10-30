@@ -15,8 +15,6 @@
 
 #define LOG_FILE_BUFF_SIZE	200
 
-int filptr_clogFile;
-
 int WriteToLogFile(char * cWriteToLogFileBuff, int iNumBytesToWrite);
 
 #endif /* WRITETOLOGFILE_H_ */
