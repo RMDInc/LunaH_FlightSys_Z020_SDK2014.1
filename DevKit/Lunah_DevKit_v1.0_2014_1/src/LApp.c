@@ -116,15 +116,6 @@ int main()
 	XUartPs_SetOperMode(&Uart_PS, XUARTPS_OPER_MODE_NORMAL);
 	//*******************Setup the UART **********************//
 
-	//******************* Set Defaults **********************//
-	Xil_Out32 (XPAR_AXI_GPIO_0_BASEADDR, 11);	// baseline
-	Xil_Out32 (XPAR_AXI_GPIO_1_BASEADDR, 71);	// short
-	Xil_Out32 (XPAR_AXI_GPIO_2_BASEADDR, 167);	// long
-	Xil_Out32 (XPAR_AXI_GPIO_3_BASEADDR, 2015);	// full
-	Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 1);	//enable the system
-
-	//******************* Set Defaults **********************//
-
 	// *********** Setup the Hardware Reset GPIO ****************//
 	GPIOConfigPtr = XGpioPs_LookupConfig(XPAR_PS7_GPIO_0_DEVICE_ID);
 	Status = XGpioPs_CfgInitialize(&Gpio, GPIOConfigPtr, GPIOConfigPtr ->BaseAddr);
@@ -173,7 +164,58 @@ int main()
 	default:
 		bytesSent = XUartPs_Send(&Uart_PS, errorBuff, 20);
 	}
+	sizeof(cLogFile);
 	// *********** Mount SD Card and Initialize Variables ****************//
+
+	//******************* Set Defaults **********************//
+	fresult = f_stat( cDefLogFile, &fno);	// check if the defaults file exists
+	switch(fresult)
+	{
+	case FR_OK:	// If the file exists, read it
+		ffs_res = f_open(&defLogFile, cDefLogFile, FA_READ|FA_WRITE);	//open with read/write access
+		ffs_res = f_lseek(&defLogFile, 0);								//move to the beginning of file, we want to
+		//read the file
+		ffs_res = f_read(&defLogFile, &ui_def_1, 4, &numBytesRead);
+		ffs_res = f_read(&defLogFile, &ui_def_2, 4, &numBytesRead);
+		ffs_res = f_read(&defLogFile, &ui_def_3, 4, &numBytesRead);
+		ffs_res = f_read(&defLogFile, &ui_def_4, 4, &numBytesRead);
+
+		//sort out what values were read from the file
+		iTriggerThreshold = ui_def_1 >> 16;
+		iintegrationTimes[0] = (ui_def_1 >> 4) & 4095;
+		iintegrationTimes[1] = ((ui_def_1 & 15) << 8) | (ui_def_2 >> 24);
+		iintegrationTimes[2] = (ui_def_2 >> 12) & 4095;
+		iintegrationTimes[3] = ui_def_2 & 4095;
+
+		ffs_res = f_close(&defLogFile);
+		break;
+	case FR_NO_FILE: //	if the file does not exist, open/create it
+		ffs_res = f_open(&defLogFile, cDefLogFile, FA_WRITE|FA_OPEN_ALWAYS);	//open a new file; this creates the log file
+		ui_def_1 = 557056000;
+		ui_def_2 = 587740649;
+		ffs_res = f_write(&defLogFile, &ui_def_1, 4, &numBytesWritten);
+		ffs_res = f_write(&defLogFile, &ui_def_1, 4, &numBytesWritten);
+		//add defaults 3 and 4 for the energy calibration
+		// and any further values to record
+
+		iTriggerThreshold = 8500;	//write out what the basic defaults should be
+		iintegrationTimes[0] = 0;	//this is in case the file gets deleted, we have values to revert to
+		iintegrationTimes[1] = 35;
+		iintegrationTimes[2] = 131;
+		iintegrationTimes[3] = 1513;
+		ffs_res = f_close(&defLogFile);									//close the file
+		break;
+	default:
+		bytesSent = XUartPs_Send(&Uart_PS, errorBuff,20);	//send a string
+	}
+
+	Xil_Out32 (XPAR_AXI_GPIO_0_BASEADDR, iintegrationTimes[0]);	// baseline
+	Xil_Out32 (XPAR_AXI_GPIO_1_BASEADDR, iintegrationTimes[1]);	// short
+	Xil_Out32 (XPAR_AXI_GPIO_2_BASEADDR, iintegrationTimes[2]);	// long
+	Xil_Out32 (XPAR_AXI_GPIO_3_BASEADDR, iintegrationTimes[3]);	// full
+	Xil_Out32(XPAR_AXI_GPIO_10_BASEADDR, iTriggerThreshold);	// set the trigger threshold
+
+	//******************* Set Defaults **********************//
 
 	// ******************* POLLING LOOP *******************//
 	while(1){
@@ -230,6 +272,7 @@ int main()
 					printf("\r\nWaiting for buffer to fill...\r\n");
 
 				//check if it's time to write SOH information
+				//...
 				//...
 			}
 			break;

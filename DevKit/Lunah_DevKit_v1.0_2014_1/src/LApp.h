@@ -62,7 +62,9 @@ FILINFO fnoDIR;
 int doMount = 0;
 char cZeroBuffer[] = "0000000000 ";
 char cLogFile[] = "LogFile.txt";	//Create a log file and file pointer
+char cDefLogFile[] = "DefaultLogFile.bin";
 FIL logFile;
+FIL defLogFile;
 char filptr_buffer[11] = {};		// Holds 10 numbers and a null terminator
 int filptr_clogFile;
 char cDirectoryLogFile0[] = "DirectoryFile.txt";	//Directory File to hold all filenames
@@ -82,6 +84,12 @@ char * dirFileContents;
 /* UART Variables */
 static u8 SendBuffer[32];		// Buffer for Transmitting Data	// Used for RecvCommandPoll()
 static char RecvBuffer[32];		// Buffer for Receiving Data
+
+/* Defaults */
+unsigned int ui_def_1 = 0;
+unsigned int ui_def_2 = 0;
+unsigned int ui_def_3 = 0;
+unsigned int ui_def_4 = 0;
 
 /* Check the size of the BRAM Buffer */
 u32 databuff = 0;		// size of the data buffer
