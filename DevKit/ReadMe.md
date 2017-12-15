@@ -22,4 +22,8 @@ The data are saved in binary format and may be converted to text format with my 
 
 10/24/2017 - GJS - v2.1 - The file pointer logic has been largely removed from this version of the devkit. The TEST command has been successful, as has adding code to properly write header and footer information to the data files being created in case 1:DAQ. This code will be replicated to the other case statements and the TEST command will be maintained to continue testing. The next step will be to move the actual data acquisition into the correct case statement. Another important testing feature will be to get the WFs working and saving to the SD card. 
 
-10/30/2017 - GJS - v2.2 - Edited case 0: DAQ in the main loop of the program. Now DAW properly opens, closes, and adds headers and footers to the data files being created/modified by the program. Most, if not all, places in the code which used the file pointer method for accessing data in the log files or data files has been removed and replaced with much simpler logic. 
+10/30/2017 - GJS - v2.2 - Edited case 0: DAQ in the main loop of the program. Now DAQ properly opens, closes, and adds headers and footers to the data files being created/modified by the program. Most, if not all, places in the code which used the file pointer method for accessing data in the log files or data files has been removed and replaced with much simpler logic. 
+
+12/12/2017 - GJS - v2.3 - Added code to track default parameters and load them into the corresponding GPIOs when after the system boots. 
+
+12/15/2017 - GJS - v2.31 - Edited case 6, which is the transfer file command. Adding packetization scheme into the transfer function so that the bus can receive data files. Not finished implementing yet.

@@ -50,7 +50,7 @@ int main()
 	int iSprintfReturn = 0;
 	uint numBytesRead = 0;
 	int totalBytesRead = 0;
-	char cTransferFileContents[101] = "";
+	unsigned char cTransferFileContents[10001] = "";
 
 	//test write zeroes
 	FIL zeroFile;
@@ -70,6 +70,9 @@ int main()
 	unsigned int uiLocalTime = 0;
 	int iAnalogTemp = 12;
 	int iDigitalTemp = 34;
+	// case 6
+	int syncMarker = 892270675;
+	unsigned char u_packetHeader[10] = "";
 	//case 10
 	float fNCut0 = 0.0;
 	float fNCut1 = 0.0;
@@ -595,23 +598,29 @@ int main()
 			sent = 0;
 			returnVal = 0;
 			totalBytesRead = 0;
-			memset(cTransferFileContents, '0', 101);	//reset the buffer
+			memset(cTransferFileContents, '\0', 10001);	//reset the buffer
 
 			iFileSize = f_size(&fnoFileToTransfer);
 			returnValue = f_lseek(&fnoFileToTransfer, 0);	//seek to the beginning of the file
 			while(totalBytesRead < iFileSize)
 			{
-				returnValue = f_read(&fnoFileToTransfer, &(cTransferFileContents[0]), 100, &numBytesRead);	//read 100 bytes at a time until we are through with the file
+				returnValue = f_read(&fnoFileToTransfer, cTransferFileContents, PACKET_DATA_SIZE, &numBytesRead);	//read 100 bytes at a time until we are through with the file
 				totalBytesRead += numBytesRead;
-				iSprintfReturn = snprintf(cTransferFileContents, numBytesRead, cTransferFileContents + '\0');
 
-				sent = 0;
+				//create the packet here
+				u_packetHeader[0] = syncMarker >> 24;
+				u_packetHeader[1] = syncMarker >> 16;
+				u_packetHeader[2] = syncMarker >> 8;
+				u_packetHeader[3] = syncMarker;
+
+
+				sent = 0;		//reset number of bytes sent
 				returnVal = 0;
 				while(1)
 				{
-					returnVal = XUartPs_Send(&Uart_PS, &(cTransferFileContents[0]) + sent, iSprintfReturn - sent);
+					returnVal = XUartPs_Send(&Uart_PS, &(cTransferFileContents[0]) + sent, numBytesRead - sent);	//pass the buffer to the bus (RS 422?)
 					sent += returnVal;			//we want to start farther into the buffer each round
-					if(sent == iSprintfReturn)	//if we have sent the same number of bytes as the size of the buffer, we are done
+					if(sent == numBytesRead)	//if we have sent the same number of bytes as the size of the buffer, we are done
 						break;
 				}
 			}

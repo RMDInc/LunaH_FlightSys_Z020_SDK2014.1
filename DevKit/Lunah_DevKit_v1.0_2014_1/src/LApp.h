@@ -43,6 +43,7 @@
 #define IIC_DEVICE_ID		XPAR_XIICPS_0_DEVICE_ID
 #define TEST_BUFFER_SIZE	2
 #define FILENAME_SIZE		50
+#define PACKET_DATA_SIZE	2028
 
 int iPollBufferIndex;
 
