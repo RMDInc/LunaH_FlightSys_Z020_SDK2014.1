@@ -30,9 +30,9 @@ int ReadDataIn(char * cCountFileName, char * cEventFileName, float fEnergySlope,
 	dram_ceiling = 0xA004000; 	//read out just adjacent average (0xA004000 - 0xa000000 = 16384)	//167788544
 //	dram_ceiling = 0xA00C000;	//this will work with the newer bitstreams
 
-	Xil_DCacheInvalidateRange(0xa0000000, 65536);
+	Xil_DCacheInvalidateRange(0xa0000000, 65536);	//invalidate the range of addresses starting with dram_addr (the base value)
 
-	//identify the first good value and skip the rest
+	//identify the first good value and skip the rest	//is this valid? we should probably just record all the data	//this will depend on if/how we are processing the data
 	while(1)
 	{
 		data = Xil_In32(dram_addr);
@@ -90,8 +90,8 @@ int ReadDataIn(char * cCountFileName, char * cEventFileName, float fEnergySlope,
 	res = f_open(&file1, cEventFileName, FA_OPEN_ALWAYS | FA_WRITE);	// Open the file if it exists, if not create a new file; file has write permission
 	if(res)
 		sw = 1;
-	res = f_lseek(&file1, file1.fsize);		// Move the file write pointer to somewhere in the file
-	res = f_write(&file1, (const void*)data_array, fileSize, &numBytesWritten);	// Write the array data from above to the file, returns the #bytes written
+	res = f_lseek(&file1, file1.fsize);		// Move the file write pointer to the end of the file
+	res = f_write(&file1, (const void*)data_array, fileSize, &numBytesWritten);	// Write the array data from above to the file, returns the # bytes written
 	res = f_close(&file1);					// Close the file on the SD card
 
 

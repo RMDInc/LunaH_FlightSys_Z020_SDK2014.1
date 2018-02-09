@@ -50,7 +50,6 @@ int main()
 	int iSprintfReturn = 0;
 	uint numBytesRead = 0;
 	int totalBytesRead = 0;
-	unsigned char cTransferFileContents[10001] = "";
 
 	//test write zeroes
 	FIL zeroFile;
@@ -71,8 +70,14 @@ int main()
 	int iAnalogTemp = 12;
 	int iDigitalTemp = 34;
 	// case 6
-	int syncMarker = 892270675;
-	unsigned char u_packetHeader[10] = "";
+	int index = 0;
+	int int_len = 4;
+	unsigned int sync_marker = 0x352EF853;
+	unsigned char holder = 0;
+	unsigned char seq_count_holder = 0;
+	unsigned int checksum1 = 0;
+	unsigned int checksum2 = 0;
+	unsigned char cTransferFileContents[DATA_PACKET_SIZE] = ""; //sizeof(data_packet) = 10+2028+2 = 2040 bytes
 	//case 10
 	float fNCut0 = 0.0;
 	float fNCut1 = 0.0;
@@ -103,17 +108,6 @@ int main()
 		//return 1;	}
 		xil_printf("UART init failed\r\nStatus = %d",Status);
 	}
-
-	/* Conduct a Self-test for the UART */
-	Status = XUartPs_SelfTest(&Uart_PS);
-	if (Status != 0) {
-		xil_printf("UART Self test failed.\r\nStatus = %d\r\n",Status);
-		//return 1; }			//handle error checks here better
-	//xil_printf("UART self-test failed\r\nStatus = %d",Status);
-	}
-
-	/* Check the format */
-	XUartPs_GetDataFormat(&Uart_PS, &Uart_Format);
 
 	/* Set to normal mode. */
 	XUartPs_SetOperMode(&Uart_PS, XUARTPS_OPER_MODE_NORMAL);
@@ -167,7 +161,6 @@ int main()
 	default:
 		bytesSent = XUartPs_Send(&Uart_PS, errorBuff, 20);
 	}
-	sizeof(cLogFile);
 	// *********** Mount SD Card and Initialize Variables ****************//
 
 	//******************* Set Defaults **********************//
@@ -290,12 +283,12 @@ int main()
 			snprintf(cEVTFileName, 50, "%04d_%04d_evt.bin",iorbitNumber, idaqRunNumber);	//assemble the filename for this DAQ run
 			snprintf(cCNTFileName, 50, "%04d_%04d_cnt.bin",iorbitNumber, idaqRunNumber);	//assemble the filename for this DAQ run
 			iSprintfReturn = snprintf(cReportBuff, 100, "%s_%s", cEVTFileName, cCNTFileName);	//create the string to tell CDH
-			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);				//echo the name to bus?
+			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);				//echo the name to bus? //if they aren't tracking file names, then don't do this
 
 			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
 			while(1)
 			{
-				ipollReturn = ReadCommandType(RecvBuffer, &Uart_PS);	//begin polling for either 'break', 'end', or 'START'
+				ipollReturn = ReadCommandType(RecvBuffer, &Uart_PS);	//begin polling for either 'break' or 'START'
 				if(ipollReturn == 14 || ipollReturn == 15)	//14=break, 15=start_orbitnumber
 					break;
 
@@ -370,18 +363,6 @@ int main()
 				uiTotalNeutronsPSD += 25;
 				uiLocalTime += 1;
 
-//				//write zeroes to a file
-//				returnValue = f_open(&zeroFile, cCNTFileName, FA_OPEN_ALWAYS | FA_WRITE);
-//				returnValue = f_lseek(&zeroFile, f_size(&zeroFile));
-//				returnValue = f_write(&zeroFile, uiZeroData, sizeof(uiZeroData), &numBytesWritten);
-//				returnValue = f_close(&zeroFile);
-//
-//				//write zeroes to the other file
-//				returnValue = f_open(&zeroFile, cEVTFileName, FA_OPEN_ALWAYS | FA_WRITE);
-//				returnValue = f_lseek(&zeroFile, f_size(&zeroFile));
-//				returnValue = f_write(&zeroFile, uiZeroData, sizeof(uiZeroData), &numBytesWritten);
-//				returnValue = f_close(&zeroFile);
-				//will replace the above with DAQ and ReadDataIn
 				if(Xil_In32(XPAR_AXI_GPIO_11_BASEADDR) > 4095)	//the value 4095 will change when we update to Meg's new bitstream
 				{
 					DAQ();
@@ -389,7 +370,10 @@ int main()
 					ReadDataIn(cCNTFileName, cEVTFileName,1.0, 0.0);	//give the count filename, event filename, slope, y-intercept
 				}
 
-				sleep(2);
+				//for "normal" operation, this will just loop constantly, polling the receive buffer and the gpio
+				//also, the 'per second' data heartbeat won't be reported by this function, it will be handled by another thread
+				//but since that isn't in place yet, just sleep for a second here
+				sleep(1);
 			}
 			if(ipollReturn == 16)	//if the input was END, leave the loop, go back to menu
 			{
@@ -587,7 +571,7 @@ int main()
 
 			sleep(1);	//test if the sd card needs a second to finish writing the file
 
-			returnValue = f_open(&fnoFileToTransfer, cFileToAccess, FA_READ);
+			returnValue = f_open(&fnoFileToTransfer, cFileToAccess, FA_READ);	//open the file to transfer
 			if(returnValue != FR_OK)
 			{
 				iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF");
@@ -597,35 +581,96 @@ int main()
 
 			sent = 0;
 			returnVal = 0;
-			totalBytesRead = 0;
-			memset(cTransferFileContents, '\0', 10001);	//reset the buffer
 
-			iFileSize = f_size(&fnoFileToTransfer);
+			//initialize the data packet with parameters that won't change
+			memset(cTransferFileContents, 0, DATA_PACKET_SIZE);
+			cTransferFileContents[0] = sync_marker >> 24;
+			cTransferFileContents[1] = sync_marker >> 16;
+			cTransferFileContents[2] = sync_marker >> 8;
+			cTransferFileContents[3] = sync_marker >> 0;
+			cTransferFileContents[4] = 43;
+			cTransferFileContents[5] = 43;
+			cTransferFileContents[6] = 43;
+			cTransferFileContents[7] = 0;
+
 			returnValue = f_lseek(&fnoFileToTransfer, 0);	//seek to the beginning of the file
-			while(totalBytesRead < iFileSize)
+			while(1)
 			{
-				returnValue = f_read(&fnoFileToTransfer, cTransferFileContents, PACKET_DATA_SIZE, &numBytesRead);	//read 100 bytes at a time until we are through with the file
-				totalBytesRead += numBytesRead;
+				returnValue = f_read(&fnoFileToTransfer, (void *)&(cTransferFileContents[10]), PAYLOAD_MAX_SIZE, &numBytesRead);	//read 100 bytes at a time until we are through with the file
 
-				//create the packet here
-				u_packetHeader[0] = syncMarker >> 24;
-				u_packetHeader[1] = syncMarker >> 16;
-				u_packetHeader[2] = syncMarker >> 8;
-				u_packetHeader[3] = syncMarker;
+				iFileSize = numBytesRead + 2 - 1;	//number of bytes from the read plus the two byte checksum minus one
+				cTransferFileContents[8] = iFileSize >> 8;
+				cTransferFileContents[9] = iFileSize;
 
+				for(index = 0; index < numBytesRead; index++)
+				{
+					checksum1 = (checksum1 + cTransferFileContents[index+10]) % 255;				//simple checksum
+					checksum2 = (checksum1 + checksum2) % 255;			//advanced checksum
+				}
 
-				sent = 0;		//reset number of bytes sent
-				returnVal = 0;
+				//check if we had enough data to fill the payload buffer
+				if(numBytesRead < PAYLOAD_MAX_SIZE)
+				{
+					//finish filling the buffer
+					for(; index < PAYLOAD_MAX_SIZE; index++)
+					{
+						cTransferFileContents[index+10] = 0;
+					}
+				}
+
+				cTransferFileContents[DATA_PACKET_SIZE-2] = checksum2;
+				cTransferFileContents[DATA_PACKET_SIZE-1] = checksum1;
+
+				//send the data out over the UART
+				sent = 0;		//reset the number of bytes sent
+				returnVal = 0;	//reset the number of bytes sent
+				//set the remaining unset bits to 0xFF = 255;
+//				printf("\r\n%c_%c_%c_%c_%c_%c_%c_%c_%c_%c\r\n",cTransferFileContents[0],cTransferFileContents[1],cTransferFileContents[2],cTransferFileContents[3],cTransferFileContents[4],cTransferFileContents[5],cTransferFileContents[6],cTransferFileContents[7],cTransferFileContents[8],cTransferFileContents[9]);
+//				printf("%c_%c\r\n",cTransferFileContents[DATA_PACKET_SIZE-2],cTransferFileContents[DATA_PACKET_SIZE-1]);
+//				xil_printf("num_bytes_read=%d\r\n",numBytesRead);
+//
+//				//try writing just the header to the UART at first, then sending the packet
+//				//this will tell the function exactly how many bytes there are and hopefully it will accept nulls
+				returnVal = XUartPs_Send(&Uart_PS,&(cTransferFileContents[0]), 10);	//send just the header
+
 				while(1)
 				{
-					returnVal = XUartPs_Send(&Uart_PS, &(cTransferFileContents[0]) + sent, numBytesRead - sent);	//pass the buffer to the bus (RS 422?)
+					returnVal = XUartPs_Send(&Uart_PS, &(cTransferFileContents[10]) + sent, (DATA_PACKET_SIZE - 10) - sent);	//pass the buffer to the bus (RS 422?)
 					sent += returnVal;			//we want to start farther into the buffer each round
-					if(sent == numBytesRead)	//if we have sent the same number of bytes as the size of the buffer, we are done
+					if(sent == (DATA_PACKET_SIZE - 10))	//if we have sent the same number of bytes as the size of the buffer, we are done
 						break;
 				}
-			}
+//				xil_printf("\r\n%d\r\n",sent);
 
-			returnValue = f_close(&fnoFileToTransfer);
+				//we want to break out once the file is totally read
+				if(numBytesRead < PAYLOAD_MAX_SIZE)
+					break;
+				else
+				{
+					//if we aren't done reading yet, reset variables
+//					memset(cTransferFileContents, 0, DATA_PACKET_SIZE);
+
+					//determine if we need to roll over the sequence count value
+					if(cTransferFileContents[7] < 255)	// (2^8)-1	//if we are not ready to roll over the small sequence count yet
+						cTransferFileContents[7]++;
+					else								// or, if we are, roll over the small sequence count, 255 -> 0
+					{
+						seq_count_holder = cTransferFileContents[6] << 2;	//get rid of the first two bits
+						seq_count_holder = cTransferFileContents[6] >> 2;	//shift back to get the sequence count bits back in place
+						cTransferFileContents[7] = 0;		//roll over the small count
+						if(seq_count_holder < 63)		//if the big count is small enough
+							cTransferFileContents[6] += 1;//add one to the total
+						else
+						{
+							cTransferFileContents[6] & 192;	//mask with 1100 0000 to preserve the first two bits, but zero out the msb of sequence count
+							break;
+						}
+					}
+				}
+			}//end of while
+
+			returnValue = f_close(&fnoFileToTransfer);	//close the transfer file
+
 			break;
 		case 7: //Delete Files
 			iscanfReturn = sscanf(RecvBuffer + 3 + 1, " %s", cFileToAccess);	//read in the name of the file to be deleted
