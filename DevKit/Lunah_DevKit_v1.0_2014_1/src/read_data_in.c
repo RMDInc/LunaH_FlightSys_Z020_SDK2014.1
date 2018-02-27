@@ -10,6 +10,7 @@
 int ReadDataIn(char * cCountFileName, char * cEventFileName, float fEnergySlope, float fEnergyIntercept)
 {
 	int sw = 0;						// switch to stop and return to main menu  0= default.  1 = return
+	unsigned int n_psd_total = 0;
 	unsigned int data = 0;
 	int dram_ceiling = 0;
 	int dram_addr = 0;
@@ -17,8 +18,26 @@ int ReadDataIn(char * cCountFileName, char * cEventFileName, float fEnergySlope,
 	int diff = 0;
 	double bl1, bl2, bl3, bl4, bl_avg;	// bl_sum;
 
+	double e_cut_primary_low = 80000.0;		//these are the neutron cut values
+	double e_cut_primary_high = 200000.0;	//energy along the x-axis
+	double psd_cut_primary_low = 0.5;		//psd along the y-axis
+	double psd_cut_primary_high = 1.2;
+
+	double e_cut_secondary_low = e_cut_primary_low * 0.75;	//these are the neutron wide cut values
+	double e_cut_secondary_high = e_cut_primary_high * 1.25;
+	double psd_cut_secondary_low = psd_cut_primary_low * 0.75;
+	double psd_cut_secondary_high = psd_cut_primary_high * 1.25;
+
 	struct event_raw *data_array;
-	data_array = (struct event_raw *)malloc(sizeof(double)*512);
+	data_array = (struct event_raw *)malloc(sizeof(double)*EVENTS_PER_BUFFER);
+
+	struct cps_data *mns_cps;
+	mns_cps = (struct cps_data *)malloc(sizeof(struct cps_data)*EVENTS_PER_BUFFER);
+
+	static FIL file1;
+	FRESULT res;				// Return variable for SD functions
+	uint numBytesWritten;
+	int bytes_to_write = 0;
 
 	bl1 = 0.0;
 	bl2 = 0.0;
@@ -69,6 +88,26 @@ int ReadDataIn(char * cCountFileName, char * cEventFileName, float fEnergySlope,
 			data_array[array_index].fi = ((double)Xil_In32(dram_addr + 28) / 16.0) - bl_avg * 1551.0;
 			data_array[array_index].psd = data_array[array_index].si / (data_array[array_index].li - data_array[array_index].si);
 			data_array[array_index].energy = fEnergySlope * data_array[array_index].fi + fEnergyIntercept;
+
+			//check the primary neutron cuts
+			if((psd_cut_primary_low < data_array[array_index].psd) && (data_array[array_index].psd < psd_cut_primary_high))
+				if((e_cut_primary_low < data_array[array_index].energy) && (data_array[array_index].energy < e_cut_primary_high))
+					mns_cps[array_index].n_psd++;
+
+			//check the energy cuts only (n w/no psd)
+			if((e_cut_primary_low < data_array[array_index].energy) && (data_array[array_index].energy < e_cut_primary_high))
+				mns_cps[array_index].n_no_psd++;
+
+			//check the secondary neutron cuts (n wide cut)
+			if((psd_cut_secondary_low < data_array[array_index].psd) && (data_array[array_index].psd < psd_cut_secondary_high))
+				if((e_cut_secondary_low < data_array[array_index].energy) && (data_array[array_index].energy < e_cut_secondary_high))
+					mns_cps[array_index].n_wide_cut++;
+
+			//finish filling the values for the cps event
+			mns_cps[array_index].counts = data_array[array_index].total_events;
+			mns_cps[array_index].time = data_array[array_index].time;
+			mns_cps[array_index].temp = 25;
+
 			++array_index;
 			dram_addr = dram_addr + 32;		//align the loop with the data
 		}
@@ -76,25 +115,27 @@ int ReadDataIn(char * cCountFileName, char * cEventFileName, float fEnergySlope,
 			dram_addr += 4;
 	}	// end of while loop
 
-	//SD card stuff //uncomment when ready to test SD card
-
-	static FIL file1;
-	FRESULT res;				// Return variable for SD functions
-	uint numBytesWritten;
-	int fileSize = 0;
-
-//	Xil_DCacheFlush();	//no idea what these are for
-//	Xil_DCacheDisable();
-
-	//open, write to, and close the data file //writes one buffer at a time
+	//write the event-by-event file
 	res = f_open(&file1, cEventFileName, FA_OPEN_ALWAYS | FA_WRITE);	// Open the file if it exists, if not create a new file; file has write permission
 	if(res)
 		sw = 1;
 	res = f_lseek(&file1, file1.fsize);		// Move the file write pointer to the end of the file
-	res = f_write(&file1, (const void*)data_array, fileSize, &numBytesWritten);	// Write the array data from above to the file, returns the # bytes written
+	bytes_to_write = sizeof(struct event_raw) * EVENTS_PER_BUFFER;
+	res = f_write(&file1, (const void*)data_array, bytes_to_write, &numBytesWritten);	// Write the array data from above to the file, returns the # bytes written
 	res = f_close(&file1);					// Close the file on the SD card
 
+	//write the cps file
+	res = f_open(&file1, cCountFileName, FA_OPEN_ALWAYS | FA_WRITE);	// Open the file if it exists, if not create a new file; file has write permission
+	if(res)
+		sw = 1;
+	res = f_lseek(&file1, file1.fsize);		// Move the file write pointer to the end of the file
+	bytes_to_write = sizeof(struct cps_data) * EVENTS_PER_BUFFER;
+	res = f_write(&file1, (const void*)mns_cps, bytes_to_write, &numBytesWritten);	// Write the array data from above to the file, returns the # bytes written
+	res = f_close(&file1);					// Close the file on the SD card
+
+	n_psd_total = mns_cps[array_index-1].n_psd;
 
 	free(data_array);			// Return the space reserved for the array back to the OS
-	return sw;
+	free(mns_cps);
+	return n_psd_total;
 } //eof

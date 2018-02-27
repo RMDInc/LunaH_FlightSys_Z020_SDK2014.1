@@ -28,6 +28,7 @@
 #define SW_BREAK_GPIO		51
 #define data_array_size		512
 #define FILENAME_BUFF_SIZE	120
+#define	EVENTS_PER_BUFFER	512
 
 ///// Structure Definitions ////
 
@@ -41,6 +42,15 @@ struct event_raw {			// Structure is 8+4+8+8+8+8= 44 bytes long
 	double fi;
 	double psd;
 	double energy;
+};
+
+struct cps_data {
+	unsigned short n_psd;
+	unsigned short counts;
+	unsigned short n_no_psd;
+	unsigned short n_wide_cut;
+	unsigned int time;
+	unsigned char temp;
 };
 
 struct event_by_event {

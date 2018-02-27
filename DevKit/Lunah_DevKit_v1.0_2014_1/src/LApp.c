@@ -17,7 +17,6 @@ int main()
 
 	int iterator = 0;
 	int	imenusel = 99999;	// Menu Select
-	int iscanfReturn = 0;
 	int iwfRunNumber = 0;
 	int idaqRunNumber = 0;
 	int iorbitNumber = 0;
@@ -47,7 +46,7 @@ int main()
 	//transfer file variables
 	FIL fnoFileToTransfer;
 	int iFileSize = 0;
-	int iSprintfReturn = 0;
+	unsigned int iSprintfReturn = 0;
 	uint numBytesRead = 0;
 	int totalBytesRead = 0;
 
@@ -71,9 +70,7 @@ int main()
 	int iDigitalTemp = 34;
 	// case 6
 	int index = 0;
-	int int_len = 4;
 	unsigned int sync_marker = 0x352EF853;
-	unsigned char holder = 0;
 	unsigned char seq_count_holder = 0;
 	unsigned int checksum1 = 0;
 	unsigned int checksum2 = 0;
@@ -96,18 +93,12 @@ int main()
 	Xil_Out32 (XPAR_AXI_GPIO_17_BASEADDR , 1);
 	InitializeInterruptSystem(XPAR_PS7_SCUGIC_0_DEVICE_ID);
 
-	// Initialize buffers
-	memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
-	memset(SendBuffer, '0', 32);	// Clear SendBuffer Variable
-
 	//*******************Setup the UART **********************//
 	XUartPs_Config *Config = XUartPs_LookupConfig(UART_DEVICEID);
-	if (NULL == Config) { return 1;}
+	if (Config == NULL) { return 1;}
 	Status = XUartPs_CfgInitialize(&Uart_PS, Config, Config->BaseAddress);
-	if (Status != 0){
-		//return 1;	}
+	if (Status != 0)
 		xil_printf("UART init failed\r\nStatus = %d",Status);
-	}
 
 	/* Set to normal mode. */
 	XUartPs_SetOperMode(&Uart_PS, XUARTPS_OPER_MODE_NORMAL);
@@ -117,7 +108,7 @@ int main()
 	GPIOConfigPtr = XGpioPs_LookupConfig(XPAR_PS7_GPIO_0_DEVICE_ID);
 	Status = XGpioPs_CfgInitialize(&Gpio, GPIOConfigPtr, GPIOConfigPtr ->BaseAddr);
 	if (Status != XST_SUCCESS) { return XST_FAILURE; }
-	XGpioPs_SetDirectionPin(&Gpio, SW_BREAK_GPIO, 1);
+	XGpioPs_SetDirectionPin(&Gpio, SW_BREAK_GPIO, 1);	//break is 18
 	// *********** Setup the Hardware Reset MIO ****************//
 
 	// *********** Mount SD Card and Initialize Variables ****************//
@@ -127,41 +118,6 @@ int main()
 		ffs_res = f_mount(0, &fatfs);
 		doMount = 1;
 	}
-
-	fresult = f_stat( cLogFile, &fno);	// check if the command log file exists
-	switch(fresult)
-	{
-	case FR_OK:	// If the file exists, read it
-		ffs_res = f_open(&logFile, cLogFile, FA_READ|FA_WRITE);	//open with read/write access
-		ffs_res = f_lseek(&logFile, f_size(&logFile));							//move to the end of file
-		iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "POWER RESET %f ", dTime);	//write that the system was power cycled
-		ffs_res = f_write(&logFile, cWriteToLogFile, iSprintfReturn, &numBytesWritten);	//write to the file
-		ffs_res = f_close(&logFile);
-		break;
-	case FR_NO_FILE: //	if no file exists, so open/create the file
-		ffs_res = f_open(&logFile, cLogFile, FA_WRITE|FA_OPEN_ALWAYS);	//open a new file; this creates the log file
-		iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "SYSTEM ON %f", dTime);	//write the time the system is first booted
-		ffs_res = f_close(&logFile);									//close the file
-		break;
-	default:
-		bytesSent = XUartPs_Send(&Uart_PS, errorBuff,20);	//send a string
-	}
-
-	fresult = f_stat(cDirectoryLogFile0, &fnoDIR);	//check if the directory file exists
-	switch(fresult)
-	{
-	case FR_OK:	//it exists, move on
-		break;
-	case FR_NO_FILE:	//it doesn't exist, create the file and write the command log file name and it's own file name
-		ffs_res = f_open(&directoryLogFile, cDirectoryLogFile0, FA_WRITE|FA_OPEN_ALWAYS);	//create the file
-		ffs_res = f_write(&directoryLogFile, cLogFile, 11, &numBytesWritten);				//write the name of the log file because it was created above
-		ffs_res = f_write(&directoryLogFile, cDirectoryLogFile0, 17, &numBytesWritten);		//write the name of the Directory log file
-		ffs_res = f_close(&directoryLogFile);												//close the file
-		break;
-	default:
-		bytesSent = XUartPs_Send(&Uart_PS, errorBuff, 20);
-	}
-	// *********** Mount SD Card and Initialize Variables ****************//
 
 	//******************* Set Defaults **********************//
 	fresult = f_stat( cDefLogFile, &fno);	// check if the defaults file exists
@@ -205,13 +161,79 @@ int main()
 		bytesSent = XUartPs_Send(&Uart_PS, errorBuff,20);	//send a string
 	}
 
-	Xil_Out32 (XPAR_AXI_GPIO_0_BASEADDR, iintegrationTimes[0]);	// baseline
-	Xil_Out32 (XPAR_AXI_GPIO_1_BASEADDR, iintegrationTimes[1]);	// short
-	Xil_Out32 (XPAR_AXI_GPIO_2_BASEADDR, iintegrationTimes[2]);	// long
-	Xil_Out32 (XPAR_AXI_GPIO_3_BASEADDR, iintegrationTimes[3]);	// full
+	Xil_Out32(XPAR_AXI_GPIO_0_BASEADDR, iintegrationTimes[0]);	// baseline
+	Xil_Out32(XPAR_AXI_GPIO_1_BASEADDR, iintegrationTimes[1]);	// short
+	Xil_Out32(XPAR_AXI_GPIO_2_BASEADDR, iintegrationTimes[2]);	// long
+	Xil_Out32(XPAR_AXI_GPIO_3_BASEADDR, iintegrationTimes[3]);	// full
+//	Xil_Out32(XPAR_AXI_GPIO_6_BASEADDR, 0);		//disable data acquisition
+//	Xil_Out32(XPAR_AXI_GPIO_7_BASEADDR, 0);		//disable 5 volt sensor head
+//	Xil_Out32(XPAR_AXI_GPIO_13_BASEADDR, 1);	//adc reset
 	Xil_Out32(XPAR_AXI_GPIO_10_BASEADDR, iTriggerThreshold);	// set the trigger threshold
 
 	//******************* Set Defaults **********************//
+
+	fresult = f_stat( cLogFile, &fno);	// check if the command log file exists
+	switch(fresult)
+	{
+	case FR_OK:	// If the file exists, read it
+		ffs_res = f_open(&logFile, cLogFile, FA_READ|FA_WRITE);	//open with read/write access
+		ffs_res = f_lseek(&logFile, f_size(&logFile));							//move to the end of file
+		iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "POWER RESET %f ", dTime);	//write that the system was power cycled
+		ffs_res = f_write(&logFile, cWriteToLogFile, iSprintfReturn, &numBytesWritten);	//write to the file
+		ffs_res = f_close(&logFile);
+		break;
+	case FR_NO_FILE: //	if no file exists, so open/create the file
+		ffs_res = f_open(&logFile, cLogFile, FA_WRITE|FA_OPEN_ALWAYS);	//open a new file; this creates the log file
+		iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "SYSTEM ON %f", dTime);	//write the time the system is first booted
+		ffs_res = f_close(&logFile);									//close the file
+		break;
+	default:
+		bytesSent = XUartPs_Send(&Uart_PS, errorBuff,20);	//send a string
+	}
+
+	fresult = f_stat(cDirectoryLogFile0, &fnoDIR);	//check if the directory file exists
+	switch(fresult)
+	{
+	case FR_OK:	//it exists, move on
+		break;
+	case FR_NO_FILE:	//it doesn't exist, create the file and write the command log file name and it's own file name
+		ffs_res = f_open(&directoryLogFile, cDirectoryLogFile0, FA_WRITE|FA_OPEN_ALWAYS);	//create the file
+		ffs_res = f_write(&directoryLogFile, cLogFile, 11, &numBytesWritten);				//write the name of the log file because it was created above
+		ffs_res = f_write(&directoryLogFile, cDirectoryLogFile0, 17, &numBytesWritten);		//write the name of the Directory log file
+		ffs_res = f_close(&directoryLogFile);												//close the file
+		break;
+	default:
+		bytesSent = XUartPs_Send(&Uart_PS, errorBuff, 20);
+	}
+	// *********** Mount SD Card and Initialize Variables ****************//
+
+	//test area
+	/* this method was successful for writing/reading floats to a binary SD card file */
+//	FIL float_test_fil;
+//	char c_float_test[] = "float_test.bin";
+//	double d_test_num_1 = 123.456;
+//	double d_test_num_2 = 0.01243;
+//	double d_holder = 0.0;
+//
+//	//open a new sd card file, write in the numbers, try and read out the numbers
+//	ffs_res = f_open(&float_test_fil, c_float_test, FA_WRITE|FA_READ|FA_OPEN_ALWAYS);	//create the file
+//	ffs_res = f_write(&float_test_fil, &d_test_num_1, sizeof(double), &numBytesWritten);
+//	ffs_res = f_write(&float_test_fil, &d_test_num_2, sizeof(double), &numBytesWritten);
+
+//	ffs_res = f_lseek(&float_test_fil, 0);
+//	ffs_res = f_read(&float_test_fil, &d_holder, sizeof(double), &numBytesRead);
+//	printf("num_1 = %f\r\n", d_holder);
+//	d_holder = 0.0;
+//	ffs_res = f_read(&float_test_fil, &d_holder, sizeof(double), &numBytesRead);
+//	printf("num_2 = %f\r\n", d_holder);
+//
+//	ffs_res = f_close(&float_test_fil);
+//	ffs_res = f_unlink(c_float_test);
+	//end test area
+
+	// Initialize buffers
+	memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
+	memset(SendBuffer, '0', 32);	// Clear SendBuffer Variable
 
 	// ******************* POLLING LOOP *******************//
 	while(1){
@@ -230,7 +252,7 @@ int main()
 			// This code replicates the per second data heartbeat
 			sleep(1);
 			iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d_%u_%u", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
-			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+			bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			uiTotalNeutronsPSD += 25;
 			uiLocalTime += 1;
 		}
@@ -274,16 +296,16 @@ int main()
 			break;
 		case -1:
 			iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF");
-			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+			bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			break;
 		case 0:	//Capture Processed Data;
-			iscanfReturn = sscanf(RecvBuffer + 3 + 1, " %d", &iorbitNumber);
+			sscanf(RecvBuffer + 3 + 1, " %d", &iorbitNumber);
 
 			//create files and pass in filename to readDataIn function
 			snprintf(cEVTFileName, 50, "%04d_%04d_evt.bin",iorbitNumber, idaqRunNumber);	//assemble the filename for this DAQ run
 			snprintf(cCNTFileName, 50, "%04d_%04d_cnt.bin",iorbitNumber, idaqRunNumber);	//assemble the filename for this DAQ run
 			iSprintfReturn = snprintf(cReportBuff, 100, "%s_%s", cEVTFileName, cCNTFileName);	//create the string to tell CDH
-			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);				//echo the name to bus? //if they aren't tracking file names, then don't do this
+			bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);				//echo the name to bus? //if they aren't tracking file names, then don't do this
 
 			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
 			while(1)
@@ -295,26 +317,30 @@ int main()
 				// This code replicates the per second data heart beat
 				sleep(1);
 				iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d_%u_%u", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 				uiTotalNeutronsPSD += 25;
 				uiLocalTime += 1;
 			}
 			if(ipollReturn == 14)	//if the input was break, leave the loop, go back to menu
 			{
 				Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//disable system
-				bytesSent = XUartPs_Send(&Uart_PS, cBREAK, 6);	//write FAFAFA to indicate to the user that the "BREAK" was successful
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cBREAK, 6);	//write FAFAFA to indicate to the user that the "BREAK" was successful
 				break;
 			}
 
 			//'START'(15) begins data collection via DAQ(), saves the file names, command input
 			idaqRunNumber++;
-			iscanfReturn = sscanf(RecvBuffer + 5 + 1, " %llu", &iRealTime);
+			sscanf(RecvBuffer + 5 + 1, " %llu", &iRealTime);
 
 			//enable hardware
 			Xil_Out32(XPAR_AXI_GPIO_14_BASEADDR, (u32)4);	//enable processed data
 			usleep(1);
 			Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, (u32)1);	//enables system
 			usleep(1);
+//			Xil_Out32(XPAR_AXI_GPIO_6_BASEADDR, (u32)1);	//enables system
+//			usleep(1);
+//			Xil_Out32(XPAR_AXI_GPIO_7_BASEADDR, (u32)1);	//enables system
+//			usleep(1);
 
 			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "DAQ Run %s %s %llu ", cEVTFileName,cCNTFileName, iRealTime);	//write to log file that we are starting a DAQ run
 			WriteToLogFile(cWriteToLogFile, iSprintfReturn);
@@ -355,19 +381,17 @@ int main()
 				{
 					memset(RecvBuffer, '0', 32);
 					iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF");
-					bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+					bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 				}
 
 				iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d_%u_%u", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
-				uiTotalNeutronsPSD += 25;
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 				uiLocalTime += 1;
 
 				if(Xil_In32(XPAR_AXI_GPIO_11_BASEADDR) > 4095)	//the value 4095 will change when we update to Meg's new bitstream
 				{
 					DAQ();
-					//PrintData();
-					ReadDataIn(cCNTFileName, cEVTFileName,1.0, 0.0);	//give the count filename, event filename, slope, y-intercept
+					uiTotalNeutronsPSD += ReadDataIn(cCNTFileName, cEVTFileName,1.0, 0.0);	//give the count filename, event filename, slope, y-intercept
 				}
 
 				//for "normal" operation, this will just loop constantly, polling the receive buffer and the gpio
@@ -390,7 +414,7 @@ int main()
 				returnValue = f_close(&zeroFile);
 
 				iSprintfReturn = snprintf(cReportBuff, 100, "%u", uiTotalNeutronsPSD);	//return value for END_
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 
 				//write to the log file that we received END_ and the number of neutrons
 				iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "END DAQ Run %u %llu ", uiTotalNeutronsPSD, iRealTime);	//write to log file that we are starting a DAQ run
@@ -400,13 +424,13 @@ int main()
 			{
 				Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//disable system
 				WriteToLogFile(cWriteBREAK, sizeof(cWriteBREAK));
-				bytesSent = XUartPs_Send(&Uart_PS, cBREAK, 6);	//write FAFAFA to indicate to the user that the "BREAK" was successful
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cBREAK, 6);	//write FAFAFA to indicate to the user that the "BREAK" was successful
 			}
 
 			sw = 0;	//reset stop switch
 			break;
 		case 1:	//Capture WF Data
-			iscanfReturn = sscanf(RecvBuffer + 2 + 1, " %d", &iorbitNumber);
+			sscanf(RecvBuffer + 2 + 1, " %d", &iorbitNumber);
 
 			//turn on hardware
 			sleep(1);
@@ -415,7 +439,7 @@ int main()
 			snprintf(cWFDFileName, 50, "%04d_%04d_wfd.bin",iorbitNumber, iwfRunNumber);	//assemble the filename for this DAQ run
 
 			iSprintfReturn = snprintf(cReportBuff, 100, "%s", cWFDFileName);		//create the string to tell CDH
-			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);		//report to CDH
+			bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);		//report to CDH
 
 			//begin polling for either 'break', 'end', or 'START'
 			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
@@ -430,23 +454,23 @@ int main()
 				// This code replicates the per second data heartbeat
 				sleep(1);
 				iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d_%u_%u", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 				uiTotalNeutronsPSD += 25;
 				uiLocalTime += 1;
 			}
 			if(ipollReturn == 14)	//if the input was break, leave the loop, go back to menu
 			{
 				Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//disable system
-				bytesSent = XUartPs_Send(&Uart_PS, cBREAK, 6);	//write FAFAFA to indicate to the user that the "BREAK" was successful
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cBREAK, 6);	//write FAFAFA to indicate to the user that the "BREAK" was successful
 				break;
 			}
 
 			//'START' begins data collection via DAQ(), etc.
 			iwfRunNumber++;
-			iscanfReturn = sscanf(RecvBuffer + 5 + 1, " %llu", &iRealTime);
+			sscanf(RecvBuffer + 5 + 1, " %llu", &iRealTime);
 
 			//enable hardware
-			Xil_Out32(XPAR_AXI_GPIO_14_BASEADDR, 0);	//enable processed data
+			Xil_Out32(XPAR_AXI_GPIO_14_BASEADDR, 0);	//enable AA waveform mode
 			Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 1);	//enables system
 
 			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "WF run %s %llu ", cWFDFileName, iRealTime);
@@ -468,12 +492,12 @@ int main()
 				{
 					memset(RecvBuffer, '0', 32);
 					iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF");
-					bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+					bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 				}
 
 				//xil_printf("\r\n%d_%d_%x_%x\r\n", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
 				iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d_%u_%u", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);			//create the string to tell CDH
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 				uiTotalNeutronsPSD += 25;
 				uiLocalTime += 1;
 
@@ -491,19 +515,19 @@ int main()
 
 				//Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//disable system
 				iSprintfReturn = snprintf(cReportBuff, 100, "%u", uiTotalNeutronsPSD);			//create the string to tell CDH
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			}
 			else	//break was issued
 			{
 				Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//disable system
 				WriteToLogFile(cWriteBREAK, sizeof(cWriteBREAK));
-				bytesSent = XUartPs_Send(&Uart_PS, cBREAK, 6);	//write FAFAFA to indicate to the user that the "BREAK" was successful
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cBREAK, 6);	//write FAFAFA to indicate to the user that the "BREAK" was successful
 			}
 
 			sw = 0;	//reset stop switch
 			break;
 		case 2: //Set Temperature	//Just Read Temp for now...
-			iscanfReturn = sscanf(RecvBuffer + 3 + 1, " %d_%d", &iTmpSetTemp, &iTmpTimeout);
+			sscanf(RecvBuffer + 3 + 1, " %d_%d", &iTmpSetTemp, &iTmpTimeout);
 			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "TMP set %d %d ", iTmpSetTemp, iTmpTimeout);
 			WriteToLogFile(cWriteToLogFile, iSprintfReturn);
 
@@ -525,47 +549,47 @@ int main()
 				if(ipollReturn == 14 || ipollReturn == 17)	//14=break, 17=ENDTMP_
 					break;
 				iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d_%u_%u", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);			//create the string to tell CDH
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 				sleep(2);
 			}
 			if(ipollReturn == 14)	//if the input was break, leave the loop, go back to menu
 			{
 				WriteToLogFile(cWriteBREAK, sizeof(cWriteBREAK));
-				bytesSent = XUartPs_Send(&Uart_PS, cBREAK, 6);	//write FAFAFA to indicate to the user that the "BREAK" was successful
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cBREAK, 6);	//write FAFAFA to indicate to the user that the "BREAK" was successful
 			}
 			else if(ipollReturn == 17)	//ENDTMP was issued
 			{
 				iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "END TMP run %d %d ", iAnalogTemp, iterator);	//want this to read in the current temp and the time elapsed
 				WriteToLogFile(cWriteToLogFile, iSprintfReturn);
 				iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d", iAnalogTemp, iterator);	//send back what the current temp is plus how long we ran for
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);	//send a string
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);	//send a string
 			}
 			else	// timeout was reached
 			{
 				iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d", iAnalogTemp, iTmpTimeout);	//send back what the current temp is plus how long we ran for
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);	//send a string
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);	//send a string
 				//just disable the system, no need to inform that things are ok
 			}
 			break;
 		case 3: //GETSTAT
 			//this will be the callback function for the interrupts that we will use to send the heartbeat information
 			iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d_%u_%u", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
-			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);	//send a string
+			bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);	//send a string
 			break;
 		case 4: //DISABLE_ACT
 			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "DISABLE_ACT requested ");
 			WriteToLogFile(cWriteToLogFile, iSprintfReturn);
 			iSprintfReturn = snprintf(cReportBuff, 100, "AAAAAA");
-			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+			bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			break;
 		case 5: //DISABLE_TEC
 			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "DISABLE_TEC requested ");
 			WriteToLogFile(cWriteToLogFile, iSprintfReturn);
 			iSprintfReturn = snprintf(cReportBuff, 100, "AAAAAA");
-			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+			bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			break;
 		case 6: //Transfer files
-			iscanfReturn = sscanf(RecvBuffer + 2 + 1, " %s", cFileToAccess);	//read in the name of the file to be transmitted
+			sscanf(RecvBuffer + 2 + 1, " %s", cFileToAccess);	//read in the name of the file to be transmitted
 			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "file TX %s ", cFileToAccess);
 			WriteToLogFile(cWriteToLogFile, iSprintfReturn);
 
@@ -575,7 +599,7 @@ int main()
 			if(returnValue != FR_OK)
 			{
 				iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF");
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 				break;
 			}
 
@@ -673,7 +697,7 @@ int main()
 
 			break;
 		case 7: //Delete Files
-			iscanfReturn = sscanf(RecvBuffer + 3 + 1, " %s", cFileToAccess);	//read in the name of the file to be deleted
+			sscanf(RecvBuffer + 3 + 1, " %s", cFileToAccess);	//read in the name of the file to be deleted
 			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "file DEL %s ", cFileToAccess);
 			WriteToLogFile(cWriteToLogFile, iSprintfReturn);
 
@@ -681,18 +705,16 @@ int main()
 			{
 				ffs_res = f_unlink(cFileToAccess);
 				iSprintfReturn = snprintf(cReportBuff, 100, "%d_AAAA", ffs_res);
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			}
 			else
 			{
 				iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF");
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			}
 			break;
 		case 8: //List Data Files
 			//Just going to use the code from TX_filename
-			//TransferFiles(cDirectoryLogFile0,  &Uart_PS);
-
 			sent = 0;
 			returnVal = 0;
 			totalBytesRead = 0;
@@ -705,7 +727,7 @@ int main()
 			{
 				returnValue = f_read(&fnoFileToTransfer, &(cTransferFileContents[0]), 100, &numBytesRead);	//read 100 bytes at a time until we are through with the file
 				totalBytesRead += numBytesRead;
-				iSprintfReturn = snprintf(cTransferFileContents, numBytesRead, cTransferFileContents + '\0');
+				iSprintfReturn = snprintf((char *)cTransferFileContents, numBytesRead, (char *)cTransferFileContents + '\0');
 
 				sent = 0;
 				returnVal = 0;
@@ -721,7 +743,7 @@ int main()
 			returnValue = f_close(&fnoFileToTransfer);
 			break;
 		case 9: //Set Trigger Threshold
-			iscanfReturn = sscanf(RecvBuffer + 3 + 1," %d", &iTriggerThreshold);	//read in value from the recvBuffer
+			sscanf(RecvBuffer + 3 + 1," %d", &iTriggerThreshold);	//read in value from the recvBuffer
 			if((iTriggerThreshold > 0) && (iTriggerThreshold < 10000))				//check that it's within accepted values
 			{
 				Xil_Out32(XPAR_AXI_GPIO_10_BASEADDR, (u32)iTriggerThreshold);
@@ -732,26 +754,34 @@ int main()
 				iTriggerThreshold = 0;	//clear the number before reading back to it
 				iTriggerThreshold = Xil_In32(XPAR_AXI_GPIO_10_BASEADDR);
 				iSprintfReturn = snprintf(cReportBuff, 100, "%d", iTriggerThreshold);
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			}
 			else
 			{
 				iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF");
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			}
 			break;
 		case 10: //Set Neutron Cuts
-			iscanfReturn = sscanf(RecvBuffer + 6 + 1, " %f_%f_%f_%f", &fNCut0, &fNCut1, &fNCut2, &fNCut3);
-			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "set n cuts %f %f %f %f ", fNCut0, fNCut1, fNCut2, fNCut3);
-			WriteToLogFile(cWriteToLogFile, iSprintfReturn);
-			iSprintfReturn = snprintf(cReportBuff, 100, "%f_%f_%f_%f", fNCut0, fNCut1, fNCut2, fNCut3);
-			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+			sscanf(RecvBuffer + 6 + 1, " %f_%f_%f_%f", &fNCut0, &fNCut1, &fNCut2, &fNCut3);
+			if((fNCut0 < fNCut1) && (fNCut2 < fNCut3))
+			{
+				iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "set n cuts %f %f %f %f ", fNCut0, fNCut1, fNCut2, fNCut3);
+				WriteToLogFile(cWriteToLogFile, iSprintfReturn);
+				iSprintfReturn = snprintf(cReportBuff, 100, "%f_%f_%f_%f", fNCut0, fNCut1, fNCut2, fNCut3);
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
+			}
+			else
+			{
+				iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF");
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
+			}
 			break;
 		case 11: //Set High Voltage	//only works for 4 HV connections for now (should only be 4 per board)
 			IIC_SLAVE_ADDR=&IIC_SLAVE_ADDR1;
 			cntrl = 0x1; //command 1 - write contents of serial register data to RDAC - see AD5144 datasheet pg 26
 
-			iscanfReturn = sscanf(RecvBuffer + 2 + 1, " %d_%d", &rdac, &data_bits);
+			sscanf(RecvBuffer + 2 + 1, " %d_%d", &rdac, &data_bits);
 			if((rdac >= 1)&&(rdac <= 5) && (data_bits >=1) && (data_bits <= 256))
 			{
 				switch(rdac){
@@ -783,16 +813,16 @@ int main()
 				WriteToLogFile(cWriteToLogFile, iSprintfReturn);
 				//echo input to user to confirm
 				iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d", rdac, data_bits);
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			}
 			else
 			{
 				iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF");
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			}
 			break;
 		case 12: //Set Integration Times
-			iscanfReturn = sscanf(RecvBuffer + 3 + 1, " %d_%d_%d_%d", &iintegrationTimes[0], &iintegrationTimes[1], &iintegrationTimes[2], &iintegrationTimes[3]);
+			sscanf(RecvBuffer + 3 + 1, " %d_%d_%d_%d", &iintegrationTimes[0], &iintegrationTimes[1], &iintegrationTimes[2], &iintegrationTimes[3]);
 
 			if((iintegrationTimes[0] < iintegrationTimes[1]) && ( iintegrationTimes[1] < iintegrationTimes[2]) && (iintegrationTimes[2] < iintegrationTimes[3]))	//if each is greater than the last
 			{
@@ -806,24 +836,24 @@ int main()
 
 				//xil_printf("\r\n%d_%d_%d_%d\r\n", iintegrationTimes[0], iintegrationTimes[1], iintegrationTimes[2], iintegrationTimes[3]);
 				iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d_%d_%d",iintegrationTimes[0], iintegrationTimes[1], iintegrationTimes[2], iintegrationTimes[3]);
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			}
 			else
 			{
 				iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF");
-				bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			}
 			break;
 		case 13: //Set Calibration Parameters	//these will modify the energy calculation in read_data_in
-			iscanfReturn = sscanf(RecvBuffer + 4 + 1, " %f_%f", &fEnergySlope, &fEnergyIntercept);
+			sscanf(RecvBuffer + 4 + 1, " %f_%f", &fEnergySlope, &fEnergyIntercept);
 			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "energy calib %f %f ", fEnergySlope, fEnergyIntercept);
 			WriteToLogFile(cWriteToLogFile, iSprintfReturn);
 			iSprintfReturn = snprintf(cReportBuff, 100, "%f_%f",fEnergySlope, fEnergyIntercept);
-			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+			bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			break;
 		default :
 			iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF");
-			bytesSent = XUartPs_Send(&Uart_PS, cReportBuff, iSprintfReturn);
+			bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			break;
 		} // End Switch-Case Menu Select
 
@@ -838,14 +868,13 @@ int main()
 // Sets up the AXI DMA
 int InitializeAXIDma(void) {
 	u32 tmpVal_0 = 0;
-	u32 tmpVal_1 = 0;
 
 	tmpVal_0 = Xil_In32(XPAR_AXI_DMA_0_BASEADDR + 0x30);
 
 	tmpVal_0 = tmpVal_0 | 0x1001; //<allow DMA to produce interrupts> 0 0 <run/stop>
 
 	Xil_Out32 (XPAR_AXI_DMA_0_BASEADDR + 0x30, tmpVal_0);
-	tmpVal_1 = Xil_In32(XPAR_AXI_DMA_0_BASEADDR + 0x30);	//what does the return value give us? What do we do with it?
+	Xil_In32(XPAR_AXI_DMA_0_BASEADDR + 0x30);
 
 	return 0;
 }
@@ -854,6 +883,8 @@ int InitializeAXIDma(void) {
 //////////////////////////// InitializeInterruptSystem////////////////////////////////
 int InitializeInterruptSystem(u16 deviceID) {
 	int Status;
+	static XScuGic_Config *GicConfig; 	// GicConfig
+	XScuGic InterruptController;		// Interrupt controller
 
 	GicConfig = XScuGic_LookupConfig (deviceID);
 
@@ -897,8 +928,6 @@ void InterruptHandler (void ) {
 	tmpValue = Xil_In32(XPAR_AXI_DMA_0_BASEADDR + 0x34);
 	tmpValue = tmpValue | 0x1000;
 	Xil_Out32 (XPAR_AXI_DMA_0_BASEADDR + 0x34, tmpValue);
-
-	global_frame_counter++;
 }
 //////////////////////////// Interrupt Handler////////////////////////////////
 
@@ -922,7 +951,7 @@ int ReadCommandPoll() {
 	XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);	// Clear UART Read Buffer
 	for (i=0; i<32; i++ ) { RecvBuffer[i] = '_'; }			// Clear RecvBuffer Variable
 	while (!(RecvBuffer[rbuff-1] == '\n' || RecvBuffer[rbuff-1] == '\r')) {
-		rbuff += XUartPs_Recv(&Uart_PS, &RecvBuffer[rbuff],(32 - rbuff));
+		rbuff += XUartPs_Recv(&Uart_PS, (u8 *)&RecvBuffer[rbuff],(32 - rbuff));
 		sleep(0.1);			// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 0.1 s
 	}
 	return rbuff;
@@ -985,8 +1014,8 @@ int getWFDAQ(){
 
 	while(1)
 	{
-		if (!sw) { sw = XGpioPs_ReadPin(&Gpio, SW_BREAK_GPIO); } //read pin
-		XUartPs_Recv(&Uart_PS, &RecvBuffer, 32);
+//		if (!sw) { sw = XGpioPs_ReadPin(&Gpio, SW_BREAK_GPIO); } //read pin
+		XUartPs_Recv(&Uart_PS, (u8 *)&RecvBuffer, 32);
 		if ( RecvBuffer[0] == 'q' ) { sw = 1; }
 		if(sw) { return sw;	}
 

@@ -46,6 +46,7 @@
 #define DATA_PACKET_SIZE	2040
 #define PAYLOAD_MAX_SIZE	2028
 
+// The variable keeping track of how many characters have been entered into the recv buffer
 int iPollBufferIndex;
 
 // Hardware Interface
@@ -53,8 +54,6 @@ XUartPs Uart_PS;					// Instance of the UART Device
 XUartPsFormat Uart_Format;			// Specifies the format we have
 XGpioPs Gpio;						// Instance of the GPIO Driver Interface
 XGpioPs_Config *GPIOConfigPtr;		// GPIO configuration pointer
-static XScuGic_Config *GicConfig; 	// GicConfig
-XScuGic InterruptController;		// Interrupt controller
 
 /* FAT File System Variables */
 FATFS fatfs;
@@ -109,11 +108,10 @@ short cntrl = 0;
 short pot_addr = 0;
 
 // General Purpose Variables
-int retVal = 0;
-int Status; 					// General purpose Status indicator
-int sw = 0;  						// switch to stop and return to main menu  0= default.  1 = return
-u32 global_frame_counter = 0;	// Counts ... for ...
-int i = 0;						// Iterator in some places
+int retVal = 0;	// A return value
+int Status;		// General purpose Status indicator
+int sw = 0;		// switch to stop and return to main menu  0= default.  1 = return
+int i = 0;		// Iterator in some places
 
 // Methods
 int InitializeAXIDma(void); 		// Initialize AXI DMA Transfer
@@ -126,6 +124,6 @@ int PrintData();					// Print Data to the Terminal Window
 void ClearBuffers();				// Clear Processed Data Buffers
 int DAQ();							// Clear Processed Data Buffers
 int getWFDAQ();						// Print data skipping saving it to SD card
-int LNumDigits(int number);			// Determine the number of digits in an int
+int LNumDigits(int number);			// Determine the number of digits in an integer
 
 #endif /* LAPP_H_ */
