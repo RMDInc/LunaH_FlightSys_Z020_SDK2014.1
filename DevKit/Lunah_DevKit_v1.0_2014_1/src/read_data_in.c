@@ -7,7 +7,42 @@
 
 #include "read_data_in.h"
 
-int ReadDataIn(char * cCountFileName, char * cEventFileName, float fEnergySlope, float fEnergyIntercept)
+///// Structure Definitions ////
+struct event_raw {			// Structure is 8+4+8+8+8+8= 44 bytes long
+	double time;
+	long long total_events;
+	long long event_num;
+	double bl;
+	double si;
+	double li;
+	double fi;
+	double psd;
+	double energy;
+};
+
+struct cps_data {
+	unsigned short n_psd;
+	unsigned short counts;
+	unsigned short n_no_psd;
+	unsigned short n_wide_cut;
+	unsigned int time;
+	unsigned char temp;
+};
+
+struct event_by_event {
+	u16 u_EplusPSD;
+	unsigned int ui_localTime;
+	unsigned int ui_nEvents_temp_ID;
+};
+
+struct counts_per_second {
+	unsigned int ui_nPSD_CNTsOverThreshold;
+	unsigned int ui_nNoPSD_nWideCuts;
+	unsigned int ui_localTime;
+	u8 uTemp;
+};
+
+int ReadDataIn(char * cCountFileName, char * cEventFileName, double d_EnergySlope, double d_EnergyIntercept)
 {
 	int sw = 0;						// switch to stop and return to main menu  0= default.  1 = return
 	unsigned int n_psd_total = 0;
@@ -87,7 +122,7 @@ int ReadDataIn(char * cCountFileName, char * cEventFileName, float fEnergySlope,
 			data_array[array_index].li = ((double)Xil_In32(dram_addr + 24) / 16.0) - bl_avg * 169.0;
 			data_array[array_index].fi = ((double)Xil_In32(dram_addr + 28) / 16.0) - bl_avg * 1551.0;
 			data_array[array_index].psd = data_array[array_index].si / (data_array[array_index].li - data_array[array_index].si);
-			data_array[array_index].energy = fEnergySlope * data_array[array_index].fi + fEnergyIntercept;
+			data_array[array_index].energy = d_EnergySlope * data_array[array_index].fi + d_EnergyIntercept;
 
 			//check the primary neutron cuts
 			if((psd_cut_primary_low < data_array[array_index].psd) && (data_array[array_index].psd < psd_cut_primary_high))
@@ -134,6 +169,11 @@ int ReadDataIn(char * cCountFileName, char * cEventFileName, float fEnergySlope,
 	res = f_close(&file1);					// Close the file on the SD card
 
 	n_psd_total = mns_cps[array_index-1].n_psd;
+
+	if(sw == 1)
+	{
+		//there was an error opening either file to save the data
+	}
 
 	free(data_array);			// Return the space reserved for the array back to the OS
 	free(mns_cps);

@@ -63,9 +63,9 @@ FILINFO fnoDIR;
 int doMount = 0;
 char cZeroBuffer[] = "0000000000 ";
 char cLogFile[] = "LogFile.txt";	//Create a log file and file pointer
-char cDefLogFile[] = "DefaultLogFile.bin";
+char c_default_log_file[] = "default_log_file.bin";
 FIL logFile;
-FIL defLogFile;
+FIL default_log_file;
 char filptr_buffer[11] = {};		// Holds 10 numbers and a null terminator
 int filptr_clogFile;
 char cDirectoryLogFile0[] = "DirectoryFile.txt";	//Directory File to hold all filenames
@@ -112,6 +112,7 @@ int retVal = 0;	// A return value
 int Status;		// General purpose Status indicator
 int sw = 0;		// switch to stop and return to main menu  0= default.  1 = return
 int i = 0;		// Iterator in some places
+unsigned char system_mode = 0;	//overall system mode	//0x0 = standby, main menu //0x1 = DAQ //0x2 = WF //0x4 = set TMP //0x8 = TX file
 
 // Methods
 int InitializeAXIDma(void); 		// Initialize AXI DMA Transfer

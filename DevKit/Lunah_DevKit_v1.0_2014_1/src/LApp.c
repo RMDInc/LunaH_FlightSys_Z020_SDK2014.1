@@ -10,7 +10,31 @@
 
 #include "LApp.h"
 
-//////////////////////////// MAIN //////////////////// MAIN //////////////
+//Struct Definitions
+struct def_params{	//this struct will hold all the default parameters and allow us to read/write them easily
+	int i_threshold;
+	int i_baseline_int_time;
+	int i_short_int_time;
+	int i_long_int_time;
+	int i_full_int_time;
+	int i_run_number;
+	unsigned char uc_mode;
+	char c_current_filename[9];
+	int i_set_temp;
+	int i_time_out;
+	double e_cut_primary_low;		//these are the neutron cut values
+	double e_cut_primary_high;	//energy along the x-axis
+	double psd_cut_primary_low;		//psd along the y-axis
+	double psd_cut_primary_high;
+	double e_cut_secondary_low;	//these are the neutron wide cut values
+	double e_cut_secondary_high;
+	double psd_cut_secondary_low;
+	double psd_cut_secondary_high;
+	double d_energy_cal_slope;
+	double d_energy_cal_intercept;
+};
+
+//////////////////////////// MAIN //////////////////////////////////
 int main()
 {
 	//Variable Definitions
@@ -20,6 +44,7 @@ int main()
 	int iwfRunNumber = 0;
 	int idaqRunNumber = 0;
 	int iorbitNumber = 0;
+	int i_sscanf_ret = 0;
 	char cCNTFileName[FILENAME_SIZE] = "";
 	char cEVTFileName[FILENAME_SIZE] = "";
 	char cWFDFileName[FILENAME_SIZE] = "";
@@ -111,7 +136,7 @@ int main()
 	XGpioPs_SetDirectionPin(&Gpio, SW_BREAK_GPIO, 1);	//break is 18
 	// *********** Setup the Hardware Reset MIO ****************//
 
-	// *********** Mount SD Card and Initialize Variables ****************//
+	// *********** Mount SD Card and Set Defaults, Check Mode ****************//
 	filptr_clogFile = 0;
 	if( doMount == 0 ){			//Initialize the SD card here
 		ffs_res = f_mount(0, NULL);
@@ -119,71 +144,82 @@ int main()
 		doMount = 1;
 	}
 
-	//******************* Set Defaults **********************//
-	fresult = f_stat( cDefLogFile, &fno);	// check if the defaults file exists
+	//check for the file and import system parameters
+	struct def_params system_default_parameters = {};
+	struct def_params preset_system_default_parameters = {8500,0,35,131,1513,0,1,"0001_0001",25,60,85000.0,120000.0,0.8,1.2,70000.0,130000.0,0.75,1.3,1.0,0.0};
+	fresult = f_stat( c_default_log_file, &fno);
 	switch(fresult)
 	{
-	case FR_OK:	// If the file exists, read it
-		ffs_res = f_open(&defLogFile, cDefLogFile, FA_READ|FA_WRITE);	//open with read/write access
-		ffs_res = f_lseek(&defLogFile, 0);								//move to the beginning of file, we want to
-		//read the file
-		ffs_res = f_read(&defLogFile, &ui_def_1, 4, &numBytesRead);
-		ffs_res = f_read(&defLogFile, &ui_def_2, 4, &numBytesRead);
-		ffs_res = f_read(&defLogFile, &ui_def_3, 4, &numBytesRead);
-		ffs_res = f_read(&defLogFile, &ui_def_4, 4, &numBytesRead);
-
-		//sort out what values were read from the file
-		iTriggerThreshold = ui_def_1 >> 16;
-		iintegrationTimes[0] = (ui_def_1 >> 4) & 4095;
-		iintegrationTimes[1] = ((ui_def_1 & 15) << 8) | (ui_def_2 >> 24);
-		iintegrationTimes[2] = (ui_def_2 >> 12) & 4095;
-		iintegrationTimes[3] = ui_def_2 & 4095;
-
-		ffs_res = f_close(&defLogFile);
+	case FR_OK:	//if the file exists
+		ffs_res = f_open(&default_log_file, c_default_log_file, FA_WRITE|FA_READ);
+		ffs_res = f_lseek(&default_log_file, 0);
+		ffs_res = f_read(&default_log_file, &system_default_parameters, sizeof(struct def_params), &numBytesRead);
+		ffs_res = f_close(&default_log_file);
 		break;
-	case FR_NO_FILE: //	if the file does not exist, open/create it
-		ffs_res = f_open(&defLogFile, cDefLogFile, FA_WRITE|FA_OPEN_ALWAYS);	//open a new file; this creates the log file
-		ui_def_1 = 557056000;
-		ui_def_2 = 587740649;
-		ffs_res = f_write(&defLogFile, &ui_def_1, 4, &numBytesWritten);
-		ffs_res = f_write(&defLogFile, &ui_def_1, 4, &numBytesWritten);
-		//add defaults 3 and 4 for the energy calibration
-		// and any further values to record
-
-		iTriggerThreshold = 8500;	//write out what the basic defaults should be
-		iintegrationTimes[0] = 0;	//this is in case the file gets deleted, we have values to revert to
-		iintegrationTimes[1] = 35;
-		iintegrationTimes[2] = 131;
-		iintegrationTimes[3] = 1513;
-		ffs_res = f_close(&defLogFile);									//close the file
+	case FR_NO_FILE:	//if the file doesn't exist
+		ffs_res = f_open(&default_log_file, c_default_log_file, FA_WRITE|FA_READ|FA_OPEN_ALWAYS);
+		ffs_res = f_write(&default_log_file, &preset_system_default_parameters, sizeof(struct def_params), &numBytesWritten);
+		ffs_res = f_read(&default_log_file, &system_default_parameters, sizeof(struct def_params), &numBytesRead);
+		ffs_res = f_close(&default_log_file);
 		break;
 	default:
-		bytesSent = XUartPs_Send(&Uart_PS, errorBuff,20);	//send a string
+		bytesSent = XUartPs_Send(&Uart_PS, errorBuff,20);	//send error string
 	}
 
-	Xil_Out32(XPAR_AXI_GPIO_0_BASEADDR, iintegrationTimes[0]);	// baseline
-	Xil_Out32(XPAR_AXI_GPIO_1_BASEADDR, iintegrationTimes[1]);	// short
-	Xil_Out32(XPAR_AXI_GPIO_2_BASEADDR, iintegrationTimes[2]);	// long
-	Xil_Out32(XPAR_AXI_GPIO_3_BASEADDR, iintegrationTimes[3]);	// full
-//	Xil_Out32(XPAR_AXI_GPIO_6_BASEADDR, 0);		//disable data acquisition
-//	Xil_Out32(XPAR_AXI_GPIO_7_BASEADDR, 0);		//disable 5 volt sensor head
-//	Xil_Out32(XPAR_AXI_GPIO_13_BASEADDR, 1);	//adc reset
-	Xil_Out32(XPAR_AXI_GPIO_10_BASEADDR, iTriggerThreshold);	// set the trigger threshold
+	//these parameters need to be set regardless of which mode we are heading to
+	Xil_Out32(XPAR_AXI_GPIO_0_BASEADDR, system_default_parameters.i_baseline_int_time);	// baseline	//integration times stored as samples (#ns + 52) / 4
+	Xil_Out32(XPAR_AXI_GPIO_1_BASEADDR, system_default_parameters.i_short_int_time);	// short
+	Xil_Out32(XPAR_AXI_GPIO_2_BASEADDR, system_default_parameters.i_long_int_time);		// long
+	Xil_Out32(XPAR_AXI_GPIO_3_BASEADDR, system_default_parameters.i_full_int_time);		// full
+	Xil_Out32(XPAR_AXI_GPIO_10_BASEADDR,system_default_parameters.i_threshold);			// Trigger threshold
 
-	//******************* Set Defaults **********************//
+	//check the mode and set default parameters here
+	system_mode = system_default_parameters.uc_mode;
+	switch(system_mode)
+	{
+	case 0:
+		//this is standby mode, set defaults like normal and carry on
+		// do we need to do anything else to get the system ready?
+		imenusel = 99999;	//just proceed through startup normally and go to the main loop waiting for input
+		break;
+	case 1:
+		//this is DAQ mode, set important values and jump into DAQ asap
+		//create files and pass in filename to readDataIn function
+		snprintf(cEVTFileName, 50, "%s_evt.bin",system_default_parameters.c_current_filename);	//assemble the filename for this DAQ run
+		snprintf(cCNTFileName, 50, "%s_cnt.bin",system_default_parameters.c_current_filename);	//assemble the filename for this DAQ run
+		imenusel = 0;
+		break;
+	case 2:
+		//this is WF mode
+		snprintf(cWFDFileName, 50, "%s_wfd.bin",system_default_parameters.c_current_filename);	//assemble the filename for this DAQ run
+		imenusel = 1;
+		break;
+	case 4:
+		//Set TMP mode
+		imenusel = 2;
+		break;
+	case 8:
+		//TX file mode
+		imenusel = 6;
+		break;
+	default:
+		//this sends us to standby mode
+		imenusel = 99999;
+		break;
+	}
 
 	fresult = f_stat( cLogFile, &fno);	// check if the command log file exists
 	switch(fresult)
 	{
-	case FR_OK:	// If the file exists, read it
+	case FR_OK:	// If the file exists, update it
 		ffs_res = f_open(&logFile, cLogFile, FA_READ|FA_WRITE);	//open with read/write access
 		ffs_res = f_lseek(&logFile, f_size(&logFile));							//move to the end of file
 		iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "POWER RESET %f ", dTime);	//write that the system was power cycled
 		ffs_res = f_write(&logFile, cWriteToLogFile, iSprintfReturn, &numBytesWritten);	//write to the file
 		ffs_res = f_close(&logFile);
 		break;
-	case FR_NO_FILE: //	if no file exists, so open/create the file
-		ffs_res = f_open(&logFile, cLogFile, FA_WRITE|FA_OPEN_ALWAYS);	//open a new file; this creates the log file
+	case FR_NO_FILE: //	if no file exists, open/create the file
+		ffs_res = f_open(&logFile, cLogFile, FA_WRITE|FA_READ|FA_OPEN_ALWAYS);	//open a new file; this creates the log file
 		iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "SYSTEM ON %f", dTime);	//write the time the system is first booted
 		ffs_res = f_close(&logFile);									//close the file
 		break;
@@ -197,7 +233,7 @@ int main()
 	case FR_OK:	//it exists, move on
 		break;
 	case FR_NO_FILE:	//it doesn't exist, create the file and write the command log file name and it's own file name
-		ffs_res = f_open(&directoryLogFile, cDirectoryLogFile0, FA_WRITE|FA_OPEN_ALWAYS);	//create the file
+		ffs_res = f_open(&directoryLogFile, cDirectoryLogFile0, FA_WRITE|FA_READ|FA_OPEN_ALWAYS);	//create the file
 		ffs_res = f_write(&directoryLogFile, cLogFile, 11, &numBytesWritten);				//write the name of the log file because it was created above
 		ffs_res = f_write(&directoryLogFile, cDirectoryLogFile0, 17, &numBytesWritten);		//write the name of the Directory log file
 		ffs_res = f_close(&directoryLogFile);												//close the file
@@ -205,30 +241,9 @@ int main()
 	default:
 		bytesSent = XUartPs_Send(&Uart_PS, errorBuff, 20);
 	}
-	// *********** Mount SD Card and Initialize Variables ****************//
 
 	//test area
-	/* this method was successful for writing/reading floats to a binary SD card file */
-//	FIL float_test_fil;
-//	char c_float_test[] = "float_test.bin";
-//	double d_test_num_1 = 123.456;
-//	double d_test_num_2 = 0.01243;
-//	double d_holder = 0.0;
-//
-//	//open a new sd card file, write in the numbers, try and read out the numbers
-//	ffs_res = f_open(&float_test_fil, c_float_test, FA_WRITE|FA_READ|FA_OPEN_ALWAYS);	//create the file
-//	ffs_res = f_write(&float_test_fil, &d_test_num_1, sizeof(double), &numBytesWritten);
-//	ffs_res = f_write(&float_test_fil, &d_test_num_2, sizeof(double), &numBytesWritten);
 
-//	ffs_res = f_lseek(&float_test_fil, 0);
-//	ffs_res = f_read(&float_test_fil, &d_holder, sizeof(double), &numBytesRead);
-//	printf("num_1 = %f\r\n", d_holder);
-//	d_holder = 0.0;
-//	ffs_res = f_read(&float_test_fil, &d_holder, sizeof(double), &numBytesRead);
-//	printf("num_2 = %f\r\n", d_holder);
-//
-//	ffs_res = f_close(&float_test_fil);
-//	ffs_res = f_unlink(c_float_test);
 	//end test area
 
 	// Initialize buffers
@@ -256,6 +271,8 @@ int main()
 			uiTotalNeutronsPSD += 25;
 			uiLocalTime += 1;
 		}
+		//reset variables before case
+		ipollReturn = 0;
 
 		switch (imenusel) { // Switch-Case Menu Select
 		case -2: //Test case statement for bringing DAQ back into the project
@@ -299,28 +316,41 @@ int main()
 			bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			break;
 		case 0:	//Capture Processed Data;
-			sscanf(RecvBuffer + 3 + 1, " %d", &iorbitNumber);
-
-			//create files and pass in filename to readDataIn function
-			snprintf(cEVTFileName, 50, "%04d_%04d_evt.bin",iorbitNumber, idaqRunNumber);	//assemble the filename for this DAQ run
-			snprintf(cCNTFileName, 50, "%04d_%04d_cnt.bin",iorbitNumber, idaqRunNumber);	//assemble the filename for this DAQ run
-			iSprintfReturn = snprintf(cReportBuff, 100, "%s_%s", cEVTFileName, cCNTFileName);	//create the string to tell CDH
-			bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);				//echo the name to bus? //if they aren't tracking file names, then don't do this
-
-			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
-			while(1)
+			i_sscanf_ret = sscanf(RecvBuffer + 3 + 1, " %d", &iorbitNumber);
+			if(i_sscanf_ret == 1)
 			{
-				ipollReturn = ReadCommandType(RecvBuffer, &Uart_PS);	//begin polling for either 'break' or 'START'
-				if(ipollReturn == 14 || ipollReturn == 15)	//14=break, 15=start_orbitnumber
-					break;
+				//do the normal thing and read the file names that come from the user, then echo to the bus
+				//create files and pass in filename to readDataIn function
+				snprintf(cEVTFileName, 50, "%04d_%04d_evt.bin",iorbitNumber, idaqRunNumber);	//assemble the filename for this DAQ run
+				snprintf(cCNTFileName, 50, "%04d_%04d_cnt.bin",iorbitNumber, idaqRunNumber);	//assemble the filename for this DAQ run
+				iSprintfReturn = snprintf(cReportBuff, 100, "%s_%s", cEVTFileName, cCNTFileName);	//create the string to tell CDH
+				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);				//echo the name to bus? //if they aren't tracking file names, then don't do this
 
-				// This code replicates the per second data heart beat
-				sleep(1);
-				iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d_%u_%u", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
-				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
-				uiTotalNeutronsPSD += 25;
-				uiLocalTime += 1;
+				iPollBufferIndex = 0;	// Reset the variable keeping track of entered characters in the receive buffer
+				while(1)
+				{
+					ipollReturn = ReadCommandType(RecvBuffer, &Uart_PS);	//begin polling for either 'break' or 'START'
+					if(ipollReturn == 14 || ipollReturn == 15)	//14=break, 15=start_realtime
+						break;
+
+					// This code replicates the per second data heart beat
+					sleep(1);
+					iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d_%u_%u", iAnalogTemp, iDigitalTemp, uiTotalNeutronsPSD, uiLocalTime);
+					bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
+					uiTotalNeutronsPSD += 25;
+					uiLocalTime += 1;
+				}
+
+				//'START'(15) begins data collection via DAQ(), saves the file names, command input
+				idaqRunNumber++;
+				sscanf(RecvBuffer + 5 + 1, " %llu", &iRealTime);
 			}
+			else
+			{
+				//need to set the orbit number	//need to set the run number
+				sscanf(system_default_parameters.c_current_filename, "%d_%d",&iorbitNumber, &idaqRunNumber);
+			}
+
 			if(ipollReturn == 14)	//if the input was break, leave the loop, go back to menu
 			{
 				Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//disable system
@@ -328,19 +358,11 @@ int main()
 				break;
 			}
 
-			//'START'(15) begins data collection via DAQ(), saves the file names, command input
-			idaqRunNumber++;
-			sscanf(RecvBuffer + 5 + 1, " %llu", &iRealTime);
-
 			//enable hardware
 			Xil_Out32(XPAR_AXI_GPIO_14_BASEADDR, (u32)4);	//enable processed data
 			usleep(1);
 			Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, (u32)1);	//enables system
 			usleep(1);
-//			Xil_Out32(XPAR_AXI_GPIO_6_BASEADDR, (u32)1);	//enables system
-//			usleep(1);
-//			Xil_Out32(XPAR_AXI_GPIO_7_BASEADDR, (u32)1);	//enables system
-//			usleep(1);
 
 			iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "DAQ Run %s %s %llu ", cEVTFileName,cCNTFileName, iRealTime);	//write to log file that we are starting a DAQ run
 			WriteToLogFile(cWriteToLogFile, iSprintfReturn);
@@ -439,7 +461,7 @@ int main()
 			snprintf(cWFDFileName, 50, "%04d_%04d_wfd.bin",iorbitNumber, iwfRunNumber);	//assemble the filename for this DAQ run
 
 			iSprintfReturn = snprintf(cReportBuff, 100, "%s", cWFDFileName);		//create the string to tell CDH
-			bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);		//report to CDH
+			bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);	//report to CDH
 
 			//begin polling for either 'break', 'end', or 'START'
 			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
@@ -834,7 +856,6 @@ int main()
 				iSprintfReturn = snprintf(cWriteToLogFile, LOG_FILE_BUFF_SIZE, "Set integration times to %d %d %d %d ", (iintegrationTimes[0]+52)/4, (iintegrationTimes[1]+52)/4, (iintegrationTimes[2]+52)/4, (iintegrationTimes[3]+52)/4);
 				WriteToLogFile(cWriteToLogFile, iSprintfReturn);
 
-				//xil_printf("\r\n%d_%d_%d_%d\r\n", iintegrationTimes[0], iintegrationTimes[1], iintegrationTimes[2], iintegrationTimes[3]);
 				iSprintfReturn = snprintf(cReportBuff, 100, "%d_%d_%d_%d",iintegrationTimes[0], iintegrationTimes[1], iintegrationTimes[2], iintegrationTimes[3]);
 				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			}
