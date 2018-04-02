@@ -1,4 +1,4 @@
-#include "K:\users\GStoddard\MiniNS_Testing\MiniNS_CDH_v1.0_SDK2014_1\DevKit\standalone_bsp_0\ps7_cortexa9_0\libsrc\xilffs_v2_0\src\include\ff.h"
+#include "ff.h"
 
 #if _USE_LFN != 0
 

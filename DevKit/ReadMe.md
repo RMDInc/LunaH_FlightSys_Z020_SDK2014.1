@@ -29,3 +29,5 @@ The data are saved in binary format and may be converted to text format with my 
 12/15/2017 - GJS - v2.31 - Edited case 6, which is the transfer file command. Adding packetization scheme into the transfer function so that the bus can receive data files. Not finished implementing yet.
 
 2/9/2018 - GJS - v2.5 - Finished the transfer file command. This command transfers packets of data which are comprised of payload (the data), a header, and a Fletcher checksum. The packets are transferred with the UART from the SD card. A return value of "FFFFFF" is sent if the file name can not be found. for finding files, case is ignored. A simple GUI in visual c++ has been created to read the files from the serial transfer and verify their contents.
+
+4/2/2018 - GJS - v2.6 - Verified the TX and DAQ functions for data product "fake" files of random data. DAQ produces both event-by-event and neutron count files according the ICD and TX transfers the contents of those files in CCSDS packets. 

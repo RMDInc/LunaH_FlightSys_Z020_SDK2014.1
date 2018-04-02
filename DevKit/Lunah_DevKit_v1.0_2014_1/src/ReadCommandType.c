@@ -49,6 +49,7 @@ int ReadCommandType(char * RecvBuffer, XUartPs *Uart_PS) {
 	fthirdVal = 0.0;
 	ffourthVal = 0.0;
 	realTime = 0;
+	iPollBufferIndex = 0;
 
 /*	while (!(RecvBuffer[rbuff-1] == '\n' || RecvBuffer[rbuff-1] == '\r'))
 	{

@@ -3,7 +3,7 @@
 	<name>Lunah_DevKit_v1.0_2014_1</name>
 	<comment></comment>
 	<projects>
-		<project>standalone_bsp_0</project>
+		<project>standalone_bsp_1</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
