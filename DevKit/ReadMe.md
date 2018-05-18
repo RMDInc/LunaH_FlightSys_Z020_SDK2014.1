@@ -33,3 +33,5 @@ The data are saved in binary format and may be converted to text format with my 
 4/2/2018 - GJS - v2.6 - Verified the TX and DAQ functions for data product "fake" files of random data. DAQ produces both event-by-event and neutron count files according the ICD and TX transfers the contents of those files in CCSDS packets. 
 
 5/18/2018 - GJS - v2.7 - Minor functionality updates. Tweaked how many bytes TX sends so both checksums are sent. Edited init sequence on PS boot. Updated .gitignore file. Updated microzed flash instructions.
+
+5/18/2018 - GJS - v2.71 - Major change of work flow. This change should simplify the steps needed for collaborators to load a microZed board with processor code and run it. The need to build a project in Xilinx SDK is eliminated. Now, user must use Vivado Lab Tools and the included files (BOOT.mcs, MZ_FSBL.elf) to program the microZed. Then, after a power cycle, the board will boot into standby mode and be ready to receive input. A new set of programming instructions are to be found in this folder.

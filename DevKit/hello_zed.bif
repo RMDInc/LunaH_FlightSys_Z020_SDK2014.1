@@ -1,0 +1,6 @@
+the_ROM_image:
+{
+	[bootloader]C:\Users\gstoddard\Desktop\2014test\MZ_FSBL\Release\MZ_FSBL.elf
+	C:\Users\gstoddard\Desktop\2014test\hw_platform_0\design_1_wrapper.bit
+	C:\Users\gstoddard\Desktop\2014test\hello_zed\Release\hello_zed.elf
+}
