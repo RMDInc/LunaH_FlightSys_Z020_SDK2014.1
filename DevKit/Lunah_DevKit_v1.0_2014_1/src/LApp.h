@@ -83,8 +83,8 @@ int dirSize = 0;
 char * dirFileContents;
 
 /* UART Variables */
-static u8 SendBuffer[32];		// Buffer for Transmitting Data	// Used for RecvCommandPoll()
-static char RecvBuffer[32];		// Buffer for Receiving Data
+static u8 SendBuffer[100];		// Buffer for Transmitting Data	// Used for RecvCommandPoll()
+static char RecvBuffer[100];		// Buffer for Receiving Data
 
 /* Defaults */
 unsigned int ui_def_1 = 0;

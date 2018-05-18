@@ -130,7 +130,7 @@ int main()
 	// case 6
 	int index = 0;
 	unsigned int sync_marker = 0x352EF853;
-	unsigned char seq_count_holder = 0;
+//	unsigned char seq_count_holder = 0;
 	unsigned int checksum1 = 0;
 	unsigned int checksum2 = 0;
 	unsigned char cTransferFileContents[DATA_PACKET_SIZE] = ""; //sizeof(data_packet) = 10+2028+2 = 2040 bytes
@@ -144,12 +144,10 @@ int main()
 	float fEnergyIntercept = 0.0;
 
 	// Initialize System
-    init_platform();  		// This initializes the platform, which is ...
+    init_platform();  		// system function
 	ps7_post_config();
-	Xil_DCacheDisable();	//
+	Xil_DCacheDisable();
 	InitializeAXIDma();		// Initialize the AXI DMA Transfer Interface
-	Xil_Out32 (XPAR_AXI_GPIO_16_BASEADDR, 16384);
-	Xil_Out32 (XPAR_AXI_GPIO_17_BASEADDR , 1);
 	InitializeInterruptSystem(XPAR_PS7_SCUGIC_0_DEVICE_ID);
 
 	//*******************Setup the UART **********************//
@@ -168,6 +166,20 @@ int main()
 	Status = XGpioPs_CfgInitialize(&Gpio, GPIOConfigPtr, GPIOConfigPtr ->BaseAddr);
 	if (Status != XST_SUCCESS) { return XST_FAILURE; }
 	XGpioPs_SetDirectionPin(&Gpio, SW_BREAK_GPIO, 1);	//break is 18
+
+	Xil_Out32 (XPAR_AXI_GPIO_0_BASEADDR, 38);	//baseline integration time
+	Xil_Out32 (XPAR_AXI_GPIO_1_BASEADDR, 73);	//short
+	Xil_Out32 (XPAR_AXI_GPIO_2_BASEADDR, 169);	//long
+	Xil_Out32 (XPAR_AXI_GPIO_3_BASEADDR, 1551);	//full
+//	Xil_Out32 (XPAR_AXI_GPIO_4_BASEADDR, 0);	//TEC stuff
+//	Xil_Out32 (XPAR_AXI_GPIO_5_BASEADDR, 0);	//TEC stuff
+//	Xil_Out32 (XPAR_AXI_GPIO_6_BASEADDR, 0);	//enable the system, allows dataa
+//	Xil_Out32 (XPAR_AXI_GPIO_7_BASEADDR, 0);	//enable 5V to sensor head
+	Xil_Out32 (XPAR_AXI_GPIO_10_BASEADDR, 8500);	//threshold, max of 2^14 (16384)
+	Xil_Out32 (XPAR_AXI_GPIO_16_BASEADDR, 16384);	//master-slave frame size
+	Xil_Out32 (XPAR_AXI_GPIO_17_BASEADDR, 1);	//master-slave enable
+	Xil_Out32(XPAR_AXI_GPIO_18_BASEADDR, 0);	//capture module enable
+
 	// *********** Setup the Hardware Reset MIO ****************//
 
 	// *********** Mount SD Card and Set Defaults, Check Mode ****************//
@@ -281,13 +293,13 @@ int main()
 	//end test area
 
 	// Initialize buffers
-	memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
-	memset(SendBuffer, '0', 32);	// Clear SendBuffer Variable
+	memset(RecvBuffer, '0', 100);	// Clear RecvBuffer Variable
+	memset(SendBuffer, '0', 100);	// Clear SendBuffer Variable
 
 	// ******************* POLLING LOOP *******************//
 	while(1){
 		XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);	// Clear UART Read Buffer
-		memset(RecvBuffer, '\0', 32);							// Clear RecvBuffer Variable
+		memset(RecvBuffer, '0', 100);							// Clear RecvBuffer Variable
 		iPollBufferIndex = 0;									// Reset the variable keeping track of entered characters in the receive buffer
 		while(1)
 		{
@@ -320,8 +332,8 @@ int main()
 			usleep(1);
 
 			XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);
+			memset(RecvBuffer, '0', 100);	// Clear RecvBuffer Variable
 			iPollBufferIndex = 0;
-			memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
 			while(1)
 			{
 				//check for user input
@@ -360,6 +372,8 @@ int main()
 				iSprintfReturn = snprintf(cReportBuff, 100, "%s_%s\n", cEVTFileName, cCNTFileName);	//create the string to tell CDH
 				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);				//echo the name to bus? //if they aren't tracking file names, then don't do this
 
+				XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);
+				memset(RecvBuffer, '0', 100);	// Clear RecvBuffer Variable
 				iPollBufferIndex = 0;	// Reset the variable keeping track of entered characters in the receive buffer
 				while(1)
 				{
@@ -425,8 +439,10 @@ int main()
 			//Begin collecting data
 			uiTotalNeutronsPSD = 0;
 			uiLocalTime = 0;
+
+			XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);
+			memset(RecvBuffer, '0', 100);	// Clear RecvBuffer Variable
 			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
-			memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
 			while(1)
 			{
 				ipollReturn = PollUart(RecvBuffer, &Uart_PS);
@@ -434,7 +450,7 @@ int main()
 					break;
 				if(ipollReturn == 18)	//tell the user that the input was bad and the buffer was reset
 				{
-					memset(RecvBuffer, '0', 32);
+					memset(RecvBuffer, '0', 100);
 					iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF\n");
 					bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 				}
@@ -540,9 +556,9 @@ int main()
 			bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);	//report to CDH
 
 			//begin polling for either 'break', 'end', or 'START'
-			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
-			memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
 			XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);	// Clear UART Read Buffer
+			memset(RecvBuffer, '0', 100);	// Clear RecvBuffer Variable
+			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
 			while(1)
 			{
 				ipollReturn = ReadCommandType(RecvBuffer, &Uart_PS);
@@ -579,8 +595,9 @@ int main()
 			//just print out some random data while polling for break, end, etc
 			uiTotalNeutronsPSD = 0;
 			uiLocalTime = 0;
+			XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);	// Clear UART Read Buffer
+			memset(RecvBuffer, '0', 100);	// Clear RecvBuffer Variable
 			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
-			memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
 			while(1)
 			{
 				ipollReturn = PollUart(RecvBuffer, &Uart_PS);
@@ -588,7 +605,7 @@ int main()
 					break;
 				if(ipollReturn == 18)	//if the input was checked and reset, inform the user that it is bad
 				{
-					memset(RecvBuffer, '0', 32);
+					memset(RecvBuffer, '0', 100);
 					iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF\n");
 					bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 				}
@@ -638,9 +655,10 @@ int main()
 			a = i2c_Recv_Buffer[0]<< 5;
 			b = a | i2c_Recv_Buffer[1] >> 3;
 			b /= 16;
-			//xil_printf("%d\xf8\x43\n", b);
+
+			XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);	// Clear UART Read Buffer
+			memset(RecvBuffer, '0', 100);	// Clear RecvBuffer Variable
 			iPollBufferIndex = 0;			// Reset the variable keeping track of entered characters in the receive buffer
-			memset(RecvBuffer, '0', 32);	// Clear RecvBuffer Variable
 			for(iterator = 1; iterator < iTmpTimeout; iterator++)
 			{
 				ipollReturn = PollUart(RecvBuffer, &Uart_PS);
@@ -711,58 +729,42 @@ int main()
 			cTransferFileContents[2] = sync_marker >> 8;
 			cTransferFileContents[3] = sync_marker >> 0;
 			cTransferFileContents[4] = 43;
-			cTransferFileContents[5] = 43;
-			cTransferFileContents[6] = 43;
+			cTransferFileContents[5] = 42;
+			cTransferFileContents[6] = 41;
 			cTransferFileContents[7] = 0;
 
 			returnValue = f_lseek(&fnoFileToTransfer, 0);	//seek to the beginning of the file
 			while(1)
 			{
-				returnValue = f_read(&fnoFileToTransfer, (void *)&(cTransferFileContents[10]), PAYLOAD_MAX_SIZE, &numBytesRead);	//read 100 bytes at a time until we are through with the file
+				returnValue = f_read(&fnoFileToTransfer, (void *)&(cTransferFileContents[10]), PAYLOAD_MAX_SIZE, &numBytesRead);	//read 2028 (payload max size) bytes at a time
 
-				iFileSize = numBytesRead + 2 - 1;	//number of bytes after the CCSDS packet header minus one
+				//number of bytes after the CCSDS packet header minus one,
+				// so data + 2 checksums - 1 (for array indexing)
+				iFileSize = numBytesRead + 2 - 1;
 				cTransferFileContents[8] = iFileSize >> 8;
 				cTransferFileContents[9] = iFileSize;
 
 				for(index = 0; index < numBytesRead; index++)
 				{
-					checksum1 = (checksum1 + cTransferFileContents[index+10]) % 255;				//simple checksum
-					checksum2 = (checksum1 + checksum2) % 255;			//advanced checksum
+					checksum1 = (checksum1 + cTransferFileContents[index+10]) % 255;	//simple checksum
+					checksum2 = (checksum1 + checksum2) % 255;							//Fletcher checksum
 				}
 
-				//check if we had enough data to fill the payload buffer
-				if(numBytesRead < PAYLOAD_MAX_SIZE)
-				{
-					//finish filling the buffer
-					for(; index < PAYLOAD_MAX_SIZE; index++)
-					{
-						cTransferFileContents[index+10] = 0;
-					}
-				}
-
-				cTransferFileContents[DATA_PACKET_SIZE-2] = checksum2;
-				cTransferFileContents[DATA_PACKET_SIZE-1] = checksum1;
+				cTransferFileContents[iFileSize + 9] = checksum2;		//iFileSize is 1 higher
+				cTransferFileContents[iFileSize + 9 + 1] = checksum1;
 
 				//send the data out over the UART
 				sent = 0;		//reset the number of bytes sent
 				returnVal = 0;	//reset the number of bytes sent
-				//set the remaining unset bits to 0xFF = 255;
-//				printf("\r\n%c_%c_%c_%c_%c_%c_%c_%c_%c_%c\r\n",cTransferFileContents[0],cTransferFileContents[1],cTransferFileContents[2],cTransferFileContents[3],cTransferFileContents[4],cTransferFileContents[5],cTransferFileContents[6],cTransferFileContents[7],cTransferFileContents[8],cTransferFileContents[9]);
-//				printf("%c_%c\r\n",cTransferFileContents[DATA_PACKET_SIZE-2],cTransferFileContents[DATA_PACKET_SIZE-1]);
-//				xil_printf("num_bytes_read=%d\r\n",numBytesRead);
-//
-//				//try writing just the header to the UART at first, then sending the packet
-//				//this will tell the function exactly how many bytes there are
-				returnVal = XUartPs_Send(&Uart_PS,&(cTransferFileContents[0]), 10);	//send just the header
-
 				while(1)
 				{
-					returnVal = XUartPs_Send(&Uart_PS, &(cTransferFileContents[10]) + sent, (DATA_PACKET_SIZE - 10) - sent);	//pass the buffer to the bus (RS 422?)
+					//pass the buffer to the bus //send iFileSize(2029) + 11 = 2040 bytes of data total
+					// this includes the packet header and both checksums
+					returnVal = XUartPs_Send(&Uart_PS, &(cTransferFileContents[0]) + sent, (iFileSize + 11) - sent);
 					sent += returnVal;			//we want to start farther into the buffer each round
-					if(sent == (DATA_PACKET_SIZE - 10))	//if we have sent the same number of bytes as the size of the buffer, we are done
+					if(sent == (iFileSize + 11))	//if we sent the same number of bytes as the buffer size, we are done
 						break;
 				}
-//				xil_printf("\r\n%d\r\n",sent);
 
 				//we want to break out once the file is totally read
 				if(numBytesRead < PAYLOAD_MAX_SIZE)
@@ -771,25 +773,6 @@ int main()
 				{
 					//increment the sequence count, it's ok if it rolls over
 					cTransferFileContents[7]++;
-					//if we aren't done reading yet, reset variables
-//					memset(cTransferFileContents, 0, DATA_PACKET_SIZE);
-
-					//determine if we need to roll over the sequence count value
-	/*				if(cTransferFileContents[7] < 255)	// (2^8)-1	//if we are not ready to roll over the small sequence count yet
-						cTransferFileContents[7]++;
-					else								// or, if we are, roll over the small sequence count, 255 -> 0
-					{
-						seq_count_holder = cTransferFileContents[6] << 2;	//get rid of the first two bits
-						seq_count_holder = cTransferFileContents[6] >> 2;	//shift back to get the sequence count bits back in place
-						cTransferFileContents[7] = 0;		//roll over the small count
-						if(seq_count_holder < 63)		//if the big count is small enough
-							cTransferFileContents[6] += 1;//add one to the total
-						else
-						{
-							cTransferFileContents[6] & 192;	//mask with 1100 0000 to preserve the first two bits, but zero out the msb of sequence count
-							break;
-						}
-					}*/
 				}
 			}//end of while
 
@@ -804,11 +787,22 @@ int main()
 			if(!f_stat(cFileToAccess, &fnoDIR2))	//returns 0 (false) if the file exists // !0 = true
 			{
 				ffs_res = f_unlink(cFileToAccess);
-				iSprintfReturn = snprintf(cReportBuff, 100, "%d_AAAA\n", ffs_res);
-				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
+				if(ffs_res == FR_OK)
+				{
+					//successful delete
+					iSprintfReturn = snprintf(cReportBuff, 100, "%d_AAAA\n", ffs_res);
+					bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
+				}
+				else
+				{
+					//failed to delete
+					iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF\n");
+					bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
+				}
 			}
 			else
 			{
+				//file did not exist
 				iSprintfReturn = snprintf(cReportBuff, 100, "FFFFFF\n");
 				bytesSent = XUartPs_Send(&Uart_PS, (u8 *)cReportBuff, iSprintfReturn);
 			}
@@ -1047,14 +1041,26 @@ int SetUpInterruptSystem(XScuGic *XScuGicInstancePtr) {
 // Read In new command, expecting a <return>
 // Returns buffer size read
 int ReadCommandPoll() {
-	u32 rbuff = 0;			// read buffer size returned
-	int i = 0; 				// index
+	char is_line_ending = '0';
+	int rbuff = 0;			// read buffer size returned
+
 	XUartPs_SetOptions(&Uart_PS,XUARTPS_OPTION_RESET_RX);	// Clear UART Read Buffer
-	for (i=0; i<32; i++ ) { RecvBuffer[i] = '_'; }			// Clear RecvBuffer Variable
-	while (!(RecvBuffer[rbuff-1] == '\n' || RecvBuffer[rbuff-1] == '\r')) {
-		rbuff += XUartPs_Recv(&Uart_PS, (u8 *)&RecvBuffer[rbuff],(32 - rbuff));
-		sleep(0.1);			// Built in Latency ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ 0.1 s
+	memset(RecvBuffer, '0', 100);	// Clear RecvBuffer Variable
+
+//	while (!(RecvBuffer[rbuff-1] == '\n' || RecvBuffer[rbuff-1] == '\r')) {
+//		rbuff += XUartPs_Recv(&Uart_PS, (u8 *)&RecvBuffer[rbuff],(100 - rbuff));
+//		sleep(0.1);			// Built in Latency 0.1 s
+//	}
+
+	while(is_line_ending != '\n' || is_line_ending != '\r'){
+		rbuff += XUartPs_Recv(&Uart_PS, (u8 *)&RecvBuffer[rbuff],(100 - rbuff));
+		if(rbuff > 100)
+			break;
+		if(rbuff != 0)
+			is_line_ending = RecvBuffer[rbuff - 1];
+		sleep(0.1);			// Built in Latency 0.1 s
 	}
+
 	return rbuff;
 
 }
@@ -1116,7 +1122,7 @@ int getWFDAQ(){
 	while(1)
 	{
 //		if (!sw) { sw = XGpioPs_ReadPin(&Gpio, SW_BREAK_GPIO); } //read pin
-		XUartPs_Recv(&Uart_PS, (u8 *)&RecvBuffer, 32);
+		XUartPs_Recv(&Uart_PS, (u8 *)&RecvBuffer, 100);
 		if ( RecvBuffer[0] == 'q' ) { sw = 1; }
 		if(sw) { return sw;	}
 
